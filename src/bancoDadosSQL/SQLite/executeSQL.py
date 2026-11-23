@@ -14,6 +14,7 @@ Uso pela linha de comando (a partir desta pasta):
     python executeSQL.py --tabelas
     python executeSQL.py --descrever kpi
 """
+
 from __future__ import annotations
 
 import argparse
@@ -23,10 +24,7 @@ from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import Any
 
-# O adapter fica na pasta acima (sem pacote), então ela entra no sys.path.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from SQLiteAdapter import Params, SQLiteAdapter
+from bancoDadosSQL.SQLite.SQLiteAdapter import Params, SQLiteAdapter  # noqa: E402
 
 # Comandos que devolvem linhas.
 _PREFIXOS_CONSULTA = ("SELECT", "WITH", "PRAGMA", "EXPLAIN", "VALUES")

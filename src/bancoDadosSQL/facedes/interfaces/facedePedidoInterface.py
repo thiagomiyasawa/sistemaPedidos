@@ -33,6 +33,7 @@ class facedePedidoInterface(Protocol):
         status_atual: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        user_id: int | None = None,
     ) -> list[Pedido]:
         """Lista pedidos, com filtros opcionais e paginação.
 
@@ -41,6 +42,7 @@ class facedePedidoInterface(Protocol):
             status_atual: filtra por status, se informado.
             limit: máximo de pedidos retornados.
             offset: quantidade de pedidos a pular.
+            user_id: se informado, só pedidos desse dono.
 
         Returns:
             list[Pedido]: pedidos encontrados.

@@ -50,7 +50,7 @@ class FacedePedido(facedePedidoInterface):
         return pedido
 
     def listar(self, obra: str | None = None, status_atual: str | None = None,
-               limit: int = 100, offset: int = 0) -> list[Pedido]:
+               limit: int = 100, offset: int = 0, user_id: int | None = None) -> list[Pedido]:
         """Lista pedidos (sem itens) ordenados por ID, com filtros e paginação.
 
         Args:
@@ -58,13 +58,15 @@ class FacedePedido(facedePedidoInterface):
             status_atual: filtra por status, se informado.
             limit: máximo de pedidos retornados.
             offset: quantidade de pedidos a pular.
+            user_id: se informado, só pedidos desse dono.
 
         Returns:
             list[Pedido]: pedidos encontrados (lista vazia se nenhum).
         """
         filtros, params = [], []
-        for col, val in (("obra", obra), ("status_atual", status_atual)):
-            if val:
+        for col, val in (("obra", obra), ("status_atual", status_atual),
+                         ("user_id", user_id)):
+            if val is not None and val != "":
                 filtros.append(f"{col} = ?")
                 params.append(val)
         where = f"WHERE {' AND '.join(filtros)}" if filtros else ""

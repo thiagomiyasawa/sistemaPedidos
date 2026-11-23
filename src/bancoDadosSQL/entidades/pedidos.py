@@ -83,6 +83,7 @@ class Pedido:
         obra: obra a que pertence (obrigatório).
         tarefa: tarefa dentro da obra (obrigatório).
         cod_rm: código do pedido no RM, se houver.
+        user_id: id do usuário dono do pedido (None se sem dono, ex.: importado do RM).
         data_criacao: data/hora de criação; aceita texto ISO e converte.
         id: identificador (None enquanto não persistido).
         itens: lista de `ItemPedido` do pedido.
@@ -95,6 +96,7 @@ class Pedido:
     obra: str
     tarefa: str
     cod_rm: int | None = None
+    user_id: int | None = None
     data_criacao: datetime | None = None
     id: int | None = None
     itens: list[ItemPedido] = field(default_factory=list)
@@ -172,7 +174,7 @@ class Pedido:
             e nunca inclui `data_criacao`.
         """
         d = {f: getattr(self, f) for f in
-             ("cod_rm", "num_itens", "status_atual", "origem", "local_entrega", "obra", "tarefa")}
+             ("cod_rm", "user_id", "num_itens", "status_atual", "origem", "local_entrega", "obra", "tarefa")}
         if self.id is not None:
             d["id"] = self.id
         return d

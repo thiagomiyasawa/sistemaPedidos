@@ -33,16 +33,21 @@ class AdapterAPI(adapterAPIInterface):
         _client: cliente `httpx.Client` reutilizado entre as requisições.
     """
 
-    def __init__(self, base_url: str | None = None, timeout: float = 10.0) -> None:
+    def __init__(self, base_url: str | None = None, timeout: float = 10.0,
+                 api_key: str | None = None) -> None:
         """Cria o adapter e o cliente HTTP.
 
         Args:
             base_url: URL base da API; se None usa a variável de ambiente
                 MONITORKPI_API_URL ou `URL_PADRAO`.
             timeout: tempo limite, em segundos, de cada requisição.
+            api_key: chave enviada no cabeçalho `X-API-Key`; se None usa a variável
+                de ambiente MONITORKPI_API_KEY (sem chave, nenhum cabeçalho é enviado).
         """
         self.base_url = (base_url or os.environ.get("MONITORKPI_API_URL") or URL_PADRAO).rstrip("/")
-        self._client = httpx.Client(base_url=self.base_url, timeout=timeout)
+        chave = api_key or os.environ.get("MONITORKPI_API_KEY")
+        headers = {"X-API-Key": chave} if chave else {}
+        self._client = httpx.Client(base_url=self.base_url, timeout=timeout, headers=headers)
 
     # --- ciclo de vida -----------------------------------------------------
     def close(self) -> None:
