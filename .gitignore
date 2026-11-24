@@ -36,3 +36,7 @@ htmlcov/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Sessão do cliente (chave de API)
+sessao.json
+sessao.json.tmp

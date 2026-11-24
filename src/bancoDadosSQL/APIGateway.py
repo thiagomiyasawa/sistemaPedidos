@@ -40,6 +40,7 @@ if not __package__:  # executado como script: coloca `src` no sys.path
 from bancoDadosSQL.DIC import DIC
 from bancoDadosSQL.dbAdapterInterface import dbAdapterInterface
 from bancoDadosSQL.entidades.pedidos import Pedido
+from bancoDadosSQL.facedes.interfaces.facedeCarrinhoInterface import facedeCarrinhoInterface
 from bancoDadosSQL.facedes.interfaces.facedeAutorizacaoInterface import (
     Permissao,
     facedeAutorizacaoInterface,
@@ -52,6 +53,7 @@ from bancoDadosSQL.facedes.interfaces.facedeMetricasInterface import (
     facedeMetricasInterface,
 )
 from bancoDadosSQL.facedes.interfaces.facedePedidoInterface import facedePedidoInterface
+from bancoDadosSQL.facedes.interfaces.facedeProdutoInterface import facedeProdutoInterface
 from bancoDadosSQL.formulariosAPI.admin import (
     AtualizarUsuarioEntrada,
     IdUsuario,
@@ -69,6 +71,12 @@ from bancoDadosSQL.formulariosAPI.atualizarPedido import (
     AtualizarPedidoEntrada,
     AtualizarPedidoSaida,
 )
+from bancoDadosSQL.formulariosAPI.carrinho import (
+    AdicionarCarrinhoEntrada,
+    IdProduto,
+    ItemCarrinhoSaida,
+    ListarCarrinhoSaida,
+)
 from bancoDadosSQL.formulariosAPI.criarPedido import (
     CriarPedidoEntrada,
     CriarPedidoSaida,
@@ -81,6 +89,7 @@ from bancoDadosSQL.formulariosAPI.login import (
     RegistroSaida,
 )
 from bancoDadosSQL.formulariosAPI.listarItens import ListarItensSaida
+from bancoDadosSQL.formulariosAPI.listarProdutos import ListarProdutosSaida, ProdutoSaida
 from bancoDadosSQL.formulariosAPI.listarPedidos import (
     ListarPedidosEntrada,
     ListarPedidosSaida,
@@ -182,6 +191,8 @@ class APIGateway:
         dev: bool | None = None,
         autenticacao_factory: Callable[[], facedeAutenticacaoInterface] = DIC.facede_autenticacao,
         autorizacao_factory: Callable[[], facedeAutorizacaoInterface] = DIC.facede_autorizacao,
+        produto_factory: Callable[[], facedeProdutoInterface] = DIC.facede_produto,
+        carrinho_factory: Callable[[], facedeCarrinhoInterface] = DIC.facede_carrinho,
     ) -> None:
         """Cria a aplicação FastAPI e registra as rotas.
 
@@ -197,9 +208,13 @@ class APIGateway:
             dev: força modo dev (True) ou produção (False); None usa `ambiente_dev()`.
             autenticacao_factory: fábrica que devolve um facade de autenticação novo por chamada.
             autorizacao_factory: fábrica que devolve um facade de autorização novo por chamada.
+            produto_factory: fábrica que devolve um facade de produtos novo por chamada.
+            carrinho_factory: fábrica que devolve um facade de carrinho novo por chamada.
         """
         self._autenticacao_factory = autenticacao_factory
         self._autorizacao_factory = autorizacao_factory
+        self._produto_factory = produto_factory
+        self._carrinho_factory = carrinho_factory
         # Fábricas (não instâncias): cada requisição cria o seu facade/conexão,
         # pois a conexão SQLite é presa à thread do endpoint.
         self._facede_factory = facede_factory
@@ -372,6 +387,22 @@ class APIGateway:
         r.add_api_route("/{pedido_id}/itens", self.adicionar_item, methods=["POST"],
                         dependencies=perm("item_pedido", "criar"), status_code=status.HTTP_201_CREATED)
         self.app.include_router(r)
+
+        # Catálogo: lê quem pode ler pedidos (não há permissão própria para produtos).
+        self.app.add_api_route("/produtos", self.listar_produtos, methods=["GET"],
+                               tags=["produtos"], dependencies=perm("pedido", "ler"))
+
+        # Carrinho: sempre do usuário autenticado (só vê/altera o próprio); não há permissão
+        # própria, então basta poder ler pedidos.
+        rc = APIRouter(prefix="/carrinho", tags=["carrinho"], dependencies=perm("pedido", "ler"))
+        rc.add_api_route("", self.listar_carrinho, methods=["GET"])
+        rc.add_api_route("", self.limpar_carrinho, methods=["DELETE"],
+                         status_code=status.HTTP_204_NO_CONTENT)
+        rc.add_api_route("/itens", self.adicionar_ao_carrinho, methods=["POST"],
+                         status_code=status.HTTP_201_CREATED)
+        rc.add_api_route("/itens/{produto_id}", self.remover_do_carrinho, methods=["DELETE"],
+                         status_code=status.HTTP_204_NO_CONTENT)
+        self.app.include_router(rc)
 
         ri = APIRouter(prefix="/itens", tags=["itens"])
         ri.add_api_route("/top", self.top_itens, methods=["GET"],
@@ -590,6 +621,87 @@ class APIGateway:
                 None if self._ve_todos(ident) else ident.user_id,
             )
             return [PedidoSaida.model_validate(p) for p in pedidos]
+
+    def listar_produtos(self) -> ListarProdutosSaida:
+        """Lista o catálogo de produtos, ordenado por categoria e código.
+
+        Returns:
+            ListarProdutosSaida: produtos com id, código, descrição e categoria.
+        """
+        with self._sessao(self._produto_factory) as f:
+            return [ProdutoSaida.model_validate(p) for p in f.listar()]
+
+    # --- carrinho ------------------------------------------------------------
+    def listar_carrinho(
+        self, ident: Annotated[Identidade, Depends(identidade_atual)]
+    ) -> ListarCarrinhoSaida:
+        """Itens do carrinho do usuário autenticado.
+
+        Args:
+            ident: usuário autenticado (dono do carrinho).
+
+        Returns:
+            ListarCarrinhoSaida: itens na ordem de inclusão, com os dados do produto.
+        """
+        with self._sessao(self._carrinho_factory) as f:
+            return [ItemCarrinhoSaida.model_validate(i) for i in f.listar(ident.user_id)]
+
+    def adicionar_ao_carrinho(
+        self,
+        corpo: AdicionarCarrinhoEntrada,
+        ident: Annotated[Identidade, Depends(identidade_atual)],
+    ) -> ListarCarrinhoSaida:
+        """Soma um produto ao carrinho do usuário (cria o item se ainda não existir).
+
+        Args:
+            corpo: produto e quantidade.
+            ident: usuário autenticado (dono do carrinho).
+
+        Returns:
+            ListarCarrinhoSaida: carrinho após a inclusão (status 201).
+
+        Raises:
+            HTTPException: 404 se o produto não existir.
+        """
+        with self._sessao(self._carrinho_factory) as f:
+            if not f.adicionar(ident.user_id, corpo.produto_id, corpo.quantidade):
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
+            return [ItemCarrinhoSaida.model_validate(i) for i in f.listar(ident.user_id)]
+
+    def remover_do_carrinho(
+        self,
+        produto_id: IdProduto,
+        ident: Annotated[Identidade, Depends(identidade_atual)],
+    ) -> None:
+        """Remove um produto do carrinho do usuário.
+
+        Args:
+            produto_id: produto a remover.
+            ident: usuário autenticado (dono do carrinho).
+
+        Returns:
+            None (status 204).
+
+        Raises:
+            HTTPException: 404 se o produto não estiver no carrinho.
+        """
+        with self._sessao(self._carrinho_factory) as f:
+            if not f.remover(ident.user_id, [produto_id]):
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Item não está no carrinho")
+
+    def limpar_carrinho(
+        self, ident: Annotated[Identidade, Depends(identidade_atual)]
+    ) -> None:
+        """Esvazia o carrinho do usuário autenticado.
+
+        Args:
+            ident: usuário autenticado (dono do carrinho).
+
+        Returns:
+            None (status 204).
+        """
+        with self._sessao(self._carrinho_factory) as f:
+            f.limpar(ident.user_id)
 
     def valores_filtros(self) -> ValoresFiltrosSaida:
         """Obras, status e origens existentes, para montar os filtros das telas.

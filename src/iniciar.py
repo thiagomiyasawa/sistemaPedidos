@@ -1,16 +1,21 @@
 """Sobe o servidor (API) e o cliente (janela Qt) juntos.
 
-Uso: `uv run monitorkpi-tudo`. Ao fechar a janela, o servidor é encerrado.
+O cliente abre pelo login (`client.paginas.sistemaLogin.paginaLogin`): com sessão guardada
+ainda válida vai direto ao menu; senão pede usuário e senha e então abre o menu.
+
+Uso: `.venv/Scripts/python.exe src/iniciar.py`. Ao fechar a janela, o servidor é encerrado.
 """
 
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import httpx
 
 HOST = "127.0.0.1"
 PORTA = 8000
+SRC = Path(__file__).resolve().parent  # pasta `src`: onde estão `bancoDadosSQL` e `client`
 
 
 def _aguardar_servidor(proc: subprocess.Popen, timeout: float = 20.0) -> bool:
@@ -47,6 +52,8 @@ def main() -> None:
             "-m",
             "uvicorn",
             "bancoDadosSQL.APIGateway:app",
+            "--app-dir",
+            str(SRC),
             "--host",
             HOST,
             "--port",
@@ -56,11 +63,9 @@ def main() -> None:
     try:
         if not _aguardar_servidor(servidor):
             raise SystemExit("Servidor não iniciou.")
-        # Descomente apenas uma das páginas por vez.
-        # from monitorkpi.paginas.paginasPedidos.paginaPedidosGeral.paginaGeral import main as cliente
-        from client.monitorkpi.paginas.paginasPedidos.paginaPedidosObra.paginaObra import (
-            main as cliente,
-        )
+        if str(SRC) not in sys.path:
+            sys.path.insert(0, str(SRC))
+        from client.paginas.sistemaLogin.paginaLogin import main as cliente
 
         cliente()
     finally:

@@ -3,8 +3,10 @@ from dependency_injector import containers, providers
 
 from .facedes.facedeAutenticacao import FacedeAutenticacao
 from .facedes.facedeAutorizacao import FacedeAutorizacao
+from .facedes.facedeCarrinho import FacedeCarrinho
 from .facedes.facedeMetricas import FacedeMetricas
 from .facedes.facedePedido import FacedePedido
+from .facedes.facedeProduto import FacedeProduto
 from .SQLite.SQLiteAdapter import SQLiteAdapter
 
 
@@ -35,3 +37,9 @@ class DIC(containers.DeclarativeContainer):
 
     # `DIC.facede_autorizacao()`: permissões por cargo/usuário e administração de usuários.
     facede_autorizacao = providers.Factory(FacedeAutorizacao, db=db)
+
+    # `DIC.facede_produto()`: leitura do catálogo de produtos.
+    facede_produto = providers.Factory(FacedeProduto, db=db)
+
+    # `DIC.facede_carrinho()`: carrinho de cada usuário (tabela `carrinho_itens_cadastro`).
+    facede_carrinho = providers.Factory(FacedeCarrinho, db=db)
