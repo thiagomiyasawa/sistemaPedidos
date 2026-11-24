@@ -11,6 +11,7 @@ Uso:
 URL base: argumento `base_url`, senão variável de ambiente MONITORKPI_API_URL,
 senão http://127.0.0.1:8000.
 """
+
 from __future__ import annotations
 
 import os
@@ -18,7 +19,10 @@ from typing import Any, Self
 
 import httpx
 
-from monitorkpi.acessoServidor.interfaces.adapterAPIInterface import ApiError, adapterAPIInterface
+from client.monitorkpi.acessoServidor.interfaces.adapterAPIInterface import (
+    ApiError,
+    adapterAPIInterface,
+)
 
 __all__ = ["AdapterAPI", "ApiError"]
 
@@ -33,8 +37,12 @@ class AdapterAPI(adapterAPIInterface):
         _client: cliente `httpx.Client` reutilizado entre as requisições.
     """
 
-    def __init__(self, base_url: str | None = None, timeout: float = 10.0,
-                 api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str | None = None,
+        timeout: float = 10.0,
+        api_key: str | None = None,
+    ) -> None:
         """Cria o adapter e o cliente HTTP.
 
         Args:
@@ -44,10 +52,14 @@ class AdapterAPI(adapterAPIInterface):
             api_key: chave enviada no cabeçalho `X-API-Key`; se None usa a variável
                 de ambiente MONITORKPI_API_KEY (sem chave, nenhum cabeçalho é enviado).
         """
-        self.base_url = (base_url or os.environ.get("MONITORKPI_API_URL") or URL_PADRAO).rstrip("/")
+        self.base_url = (
+            base_url or os.environ.get("MONITORKPI_API_URL") or URL_PADRAO
+        ).rstrip("/")
         chave = api_key or os.environ.get("MONITORKPI_API_KEY")
         headers = {"X-API-Key": chave} if chave else {}
-        self._client = httpx.Client(base_url=self.base_url, timeout=timeout, headers=headers)
+        self._client = httpx.Client(
+            base_url=self.base_url, timeout=timeout, headers=headers
+        )
 
     # --- ciclo de vida -----------------------------------------------------
     def close(self) -> None:
@@ -80,8 +92,9 @@ class AdapterAPI(adapterAPIInterface):
         self.close()
 
     # --- requisição genérica ----------------------------------------------
-    def request(self, metodo: str, caminho: str, *, params: dict | None = None,
-                json: Any = None) -> Any:
+    def request(
+        self, metodo: str, caminho: str, *, params: dict | None = None, json: Any = None
+    ) -> Any:
         """Envia a requisição e devolve o JSON da resposta (None se 204).
 
         Args:
@@ -110,8 +123,11 @@ class AdapterAPI(adapterAPIInterface):
                 detalhe = resp.json().get("detail")
             except ValueError:
                 detalhe = resp.text
-            raise ApiError(f"HTTP {resp.status_code} em {metodo} {caminho}: {detalhe}",
-                           resp.status_code, detalhe)
+            raise ApiError(
+                f"HTTP {resp.status_code} em {metodo} {caminho}: {detalhe}",
+                resp.status_code,
+                detalhe,
+            )
         return None if resp.status_code == 204 or not resp.content else resp.json()
 
     def get(self, caminho: str, **params: Any) -> Any:

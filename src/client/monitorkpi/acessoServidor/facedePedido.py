@@ -13,24 +13,37 @@ Uso:
         pedido.mudar_status("entregue")
         facede.salvar(pedido)
 """
+
 from __future__ import annotations
 
 from typing import Self
 
 from bancoDadosSQL.entidades.pedidos import ItemPedido, Pedido
-from monitorkpi.acessoServidor.adapterAPI import AdapterAPI
-from monitorkpi.acessoServidor.formulariosAPI import listarItens, listarPedidos
-from monitorkpi.acessoServidor.formulariosAPI.adicionarItem import AdicionarItemEntrada
-from monitorkpi.acessoServidor.formulariosAPI.atualizarPedido import AtualizarPedidoEntrada
-from monitorkpi.acessoServidor.formulariosAPI.criarPedido import CriarPedidoEntrada, CriarPedidoSaida
-from monitorkpi.acessoServidor.formulariosAPI.listarPedidos import ListarPedidosEntrada
-from monitorkpi.acessoServidor.formulariosAPI.obterPedido import ObterPedidoSaida
-from monitorkpi.acessoServidor.interfaces.adapterAPIInterface import (
+from client.monitorkpi.acessoServidor.adapterAPI import AdapterAPI
+from client.monitorkpi.acessoServidor.formulariosAPI import listarItens
+from client.monitorkpi.acessoServidor.formulariosAPI import listarPedidos
+from client.monitorkpi.acessoServidor.formulariosAPI.adicionarItem import (
+    AdicionarItemEntrada,
+)
+from client.monitorkpi.acessoServidor.formulariosAPI.atualizarPedido import (
+    AtualizarPedidoEntrada,
+)
+from client.monitorkpi.acessoServidor.formulariosAPI.criarPedido import (
+    CriarPedidoEntrada,
+    CriarPedidoSaida,
+)
+from client.monitorkpi.acessoServidor.formulariosAPI.listarPedidos import (
+    ListarPedidosEntrada,
+)
+from client.monitorkpi.acessoServidor.formulariosAPI.obterPedido import ObterPedidoSaida
+from client.monitorkpi.acessoServidor.interfaces.adapterAPIInterface import (
     ApiError,
     Json,
     adapterAPIInterface,
 )
-from monitorkpi.acessoServidor.interfaces.facedePedidoAPIInterface import facedePedidoAPIInterface
+from client.monitorkpi.acessoServidor.interfaces.facedePedidoAPIInterface import (
+    facedePedidoAPIInterface,
+)
 
 _NAO_ENCONTRADO = 404
 
@@ -138,11 +151,17 @@ class FacedePedidoAPI(facedePedidoAPIInterface):
             ValueError: se os filtros forem inválidos (validação do formulário).
             ApiError: em falha de comunicação com a API.
         """
-        filtro = ListarPedidosEntrada(obra=obra, status_atual=status_atual, limit=limit, offset=offset)
+        filtro = ListarPedidosEntrada(
+            obra=obra, status_atual=status_atual, limit=limit, offset=offset
+        )
         return listarPedidos.para_entidades(self.api.get("/pedidos", **filtro.params()))
 
-    def listar_todos(self, obra: str | None = None, status_atual: str | None = None,
-                     tamanho_pagina: int = 1000) -> list[Pedido]:
+    def listar_todos(
+        self,
+        obra: str | None = None,
+        status_atual: str | None = None,
+        tamanho_pagina: int = 1000,
+    ) -> list[Pedido]:
         """Todos os pedidos do filtro, percorrendo a paginação.
 
         Args:
@@ -158,7 +177,9 @@ class FacedePedidoAPI(facedePedidoAPIInterface):
         """
         todos: list[Pedido] = []
         while True:
-            lote = self.listar(obra, status_atual, limit=tamanho_pagina, offset=len(todos))
+            lote = self.listar(
+                obra, status_atual, limit=tamanho_pagina, offset=len(todos)
+            )
             todos.extend(lote)
             if len(lote) < tamanho_pagina:
                 return todos
@@ -176,7 +197,9 @@ class FacedePedidoAPI(facedePedidoAPIInterface):
             ApiError: em falha de comunicação ou erro HTTP diferente de 404.
         """
         try:
-            return listarItens.para_entidades(self.api.get(f"/pedidos/{pedido_id}/itens"))
+            return listarItens.para_entidades(
+                self.api.get(f"/pedidos/{pedido_id}/itens")
+            )
         except ApiError as e:
             if e.status_code == _NAO_ENCONTRADO:
                 return []
@@ -197,7 +220,9 @@ class FacedePedidoAPI(facedePedidoAPIInterface):
         """
         if pedido.id is None:
             corpo = CriarPedidoEntrada.de_entidade(pedido).para_json()
-            return CriarPedidoSaida.model_validate(self.api.post("/pedidos", json=corpo)).para_entidade()
+            return CriarPedidoSaida.model_validate(
+                self.api.post("/pedidos", json=corpo)
+            ).para_entidade()
 
         corpo = AtualizarPedidoEntrada.de_entidade(pedido).para_json()
         salvo = self.api.patch(f"/pedidos/{pedido.id}", json=corpo)

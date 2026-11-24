@@ -6,13 +6,26 @@ DROP TABLE IF EXISTS chavesAPI;
 DROP TABLE IF EXISTS usuario_permissao;
 DROP TABLE IF EXISTS cargo_permissao;
 DROP TABLE IF EXISTS usuario;
+DROP TABLE IF EXISTS cargos;
+DROP TABLE IF EXISTS tabelas;
+
+-- Tabelas do sistema sobre as quais se concede autorização.
+CREATE TABLE tabelas(
+    nome TEXT PRIMARY KEY COLLATE NOCASE
+);
+
+CREATE TABLE cargos(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL UNIQUE COLLATE NOCASE
+);
 
 CREATE TABLE usuario(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL UNIQUE ,
+    nome TEXT NOT NULL UNIQUE,
     senha TEXT NOT NULL,
-    cargo TEXT NOT NULL,
-    ativo INTEGER NOT NULL DEFAULT 0 CHECK(ativo in (0,1))
+    cargo_id INTEGER NOT NULL,
+    ativo INTEGER NOT NULL DEFAULT 0 CHECK(ativo in (0,1)),
+    CONSTRAINT fk_cargo_id FOREIGN KEY(cargo_id) REFERENCES cargos(id)
 );
 
 CREATE TABLE chavesAPI(
@@ -22,30 +35,34 @@ CREATE TABLE chavesAPI(
     CONSTRAINT fk_user_id FOREIGN KEY(user_id) REFERENCES usuario(id)
 );
 
--- Autorização: permissões por cargo + exceções por usuário.
--- Permissão efetiva = permissões do cargo + concedidas ao usuário - negadas ao usuário.
+-- Autorização por tabela: o cargo define o padrão; a linha do usuário (se existir
+-- para a tabela) SUBSTITUI a do cargo. `todos` = vale para registros de qualquer
+-- dono, não só os do próprio usuário (ex.: ver pedidos de outros usuários).
 CREATE TABLE cargo_permissao(
-    cargo TEXT NOT NULL COLLATE NOCASE,
-    permissao TEXT NOT NULL,
-    PRIMARY KEY(cargo, permissao)
+    cargo_id INTEGER NOT NULL,
+    tabela TEXT NOT NULL COLLATE NOCASE,
+    criar INTEGER NOT NULL DEFAULT 0 CHECK(criar in (0,1)),
+    atualizar INTEGER NOT NULL DEFAULT 0 CHECK(atualizar in (0,1)),
+    deletar INTEGER NOT NULL DEFAULT 0 CHECK(deletar in (0,1)),
+    ler INTEGER NOT NULL DEFAULT 0 CHECK(ler in (0,1)),
+    todos INTEGER NOT NULL DEFAULT 0 CHECK(todos in (0,1)),
+    PRIMARY KEY(cargo_id, tabela),
+    CONSTRAINT fk_cargo FOREIGN KEY (cargo_id) REFERENCES cargos(id),
+    CONSTRAINT fk_tabela FOREIGN KEY(tabela) REFERENCES tabelas(nome)
 );
 
 CREATE TABLE usuario_permissao(
     user_id INTEGER NOT NULL,
-    permissao TEXT NOT NULL,
-    concedida INTEGER NOT NULL CHECK(concedida in (0,1)),  -- 1 concede, 0 nega
-    PRIMARY KEY(user_id, permissao),
-    CONSTRAINT fk_user_id FOREIGN KEY(user_id) REFERENCES usuario(id)
+    tabela TEXT NOT NULL COLLATE NOCASE,
+    criar INTEGER NOT NULL DEFAULT 0 CHECK(criar in (0,1)),
+    atualizar INTEGER NOT NULL DEFAULT 0 CHECK(atualizar in (0,1)),
+    deletar INTEGER NOT NULL DEFAULT 0 CHECK(deletar in (0,1)),
+    ler INTEGER NOT NULL DEFAULT 0 CHECK(ler in (0,1)),
+    todos INTEGER NOT NULL DEFAULT 0 CHECK(todos in (0,1)),
+    PRIMARY KEY(user_id, tabela),
+    CONSTRAINT fk_user_id FOREIGN KEY(user_id) REFERENCES usuario(id),
+    CONSTRAINT fk_tabela FOREIGN KEY(tabela) REFERENCES tabelas(nome)
 );
-
--- Permissões iniciais (ajuste conforme os cargos reais). Cargo sem linhas aqui
--- (ex.: 'pendente', dado no registro) não acessa nada.
-INSERT INTO cargo_permissao(cargo, permissao) VALUES
-    ('admin', 'pedidos:ler'), ('admin', 'pedidos:criar'), ('admin', 'pedidos:alterar'),
-    ('admin', 'pedidos:remover'), ('admin', 'pedidos:todos'), ('admin', 'metricas:ler'),
-    ('admin', 'usuarios:gerenciar'),
-    ('comprador', 'pedidos:ler'), ('comprador', 'pedidos:criar'), ('comprador', 'pedidos:alterar'),
-    ('visualizador', 'pedidos:ler'), ('visualizador', 'metricas:ler');
 
 CREATE TABLE pedido (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

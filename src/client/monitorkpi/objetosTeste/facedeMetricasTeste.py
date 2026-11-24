@@ -3,6 +3,7 @@
 Reaproveita o `FacedeMetricas` do módulo `bancoDadosSQL` e adapta a assinatura ao contrato do
 cliente (`facedeMetricasAPIInterface`), de modo que pode ser usado no lugar do `FacedeMetricasAPI`.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -11,9 +12,13 @@ from typing import Self
 from bancoDadosSQL.dbAdapterInterface import dbAdapterInterface
 from bancoDadosSQL.facedes.facedeMetricas import FacedeMetricas
 from bancoDadosSQL.SQLite.SQLiteAdapter import SQLiteAdapter
-from monitorkpi.acessoServidor.formulariosAPI.topItens import TopItensEntrada
-from monitorkpi.acessoServidor.formulariosAPI.valoresFiltros import TarefasEntrada
-from monitorkpi.acessoServidor.interfaces.facedeMetricasAPIInterface import facedeMetricasAPIInterface
+from client.monitorkpi.acessoServidor.formulariosAPI.topItens import TopItensEntrada
+from client.monitorkpi.acessoServidor.formulariosAPI.valoresFiltros import (
+    TarefasEntrada,
+)
+from client.monitorkpi.acessoServidor.interfaces.facedeMetricasAPIInterface import (
+    facedeMetricasAPIInterface,
+)
 
 
 class FacedeMetricasTeste(facedeMetricasAPIInterface):
@@ -87,11 +92,17 @@ class FacedeMetricasTeste(facedeMetricasAPIInterface):
         filtro = TarefasEntrada(obra=obra)  # mesma validação do endpoint
         return self._metricas.tarefas_da_obra(filtro.obra)
 
-    def top_itens(self, obra: str | None = None, tarefa: str | None = None,
-                  status_atual: str | None = None, origem: str | None = None,
-                  dias: int | None = None,
-                  de: date | None = None, ate: date | None = None,
-                  limite: int = 10) -> list[tuple[str, int]]:
+    def top_itens(
+        self,
+        obra: str | None = None,
+        tarefa: str | None = None,
+        status_atual: str | None = None,
+        origem: str | None = None,
+        dias: int | None = None,
+        de: date | None = None,
+        ate: date | None = None,
+        limite: int = 10,
+    ) -> list[tuple[str, int]]:
         """Obtém os produtos mais pedidos (soma de quantidade).
 
         Args:
@@ -111,8 +122,23 @@ class FacedeMetricasTeste(facedeMetricasAPIInterface):
             ValueError: se os filtros forem inválidos (mesma validação do endpoint).
         """
         # Mesma validação e mesma regra de período do endpoint.
-        filtro = TopItensEntrada(obra=obra, tarefa=tarefa, status_atual=status_atual,
-                                 origem=origem, dias=dias, de=de, ate=ate, limite=limite)
+        filtro = TopItensEntrada(
+            obra=obra,
+            tarefa=tarefa,
+            status_atual=status_atual,
+            origem=origem,
+            dias=dias,
+            de=de,
+            ate=ate,
+            limite=limite,
+        )
         desde, fim = filtro.periodo()
-        return self._metricas.top_itens(filtro.obra, filtro.tarefa, filtro.status_atual,
-                                        filtro.origem, desde, fim, filtro.limite)
+        return self._metricas.top_itens(
+            filtro.obra,
+            filtro.tarefa,
+            filtro.status_atual,
+            filtro.origem,
+            desde,
+            fim,
+            filtro.limite,
+        )

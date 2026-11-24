@@ -1,4 +1,5 @@
 """Gráfico: status por obra (barras empilhadas)."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -7,8 +8,13 @@ from PySide6.QtCharts import QBarCategoryAxis, QBarSet, QStackedBarSeries, QValu
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import CORES, CartaoGrafico
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import chave_status
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import (
+    CORES,
+    CartaoGrafico,
+)
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import (
+    chave_status,
+)
 
 
 class StatusPorObra(CartaoGrafico):

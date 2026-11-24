@@ -44,7 +44,7 @@ class AtualizarUsuarioEntrada(BaseModel):
 
     Campos:
         ativo: True valida/ativa o usuário; False desativa.
-        cargo: Novo cargo (define as permissões do usuário).
+        cargo: Nome do novo cargo (define as permissões do usuário).
     """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -68,15 +68,30 @@ class AtualizarUsuarioEntrada(BaseModel):
 
 
 class PermissaoUsuarioEntrada(BaseModel):
-    """Corpo de `PUT /admin/usuarios/{id}/permissoes/{permissao}`.
+    """Corpo de `PUT /admin/usuarios/{id}/permissoes/{tabela}`.
+
+    Substitui, para essa tabela, a autorização do cargo (o que não for informado
+    fica False).
 
     Campos:
-        concedida: True concede a permissão ao usuário; False a nega.
+        criar: Pode inserir registros.
+        atualizar: Pode alterar registros.
+        deletar: Pode remover registros.
+        ler: Pode consultar registros.
+        todos: Vale para registros de qualquer dono, não só os próprios.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    concedida: bool
+    criar: bool = False
+    atualizar: bool = False
+    deletar: bool = False
+    ler: bool = False
+    todos: bool = False
+
+
+class PermissaoSaida(PermissaoUsuarioEntrada):
+    """Autorização efetiva sobre uma tabela (mesmos campos da entrada)."""
 
 
 class PermissoesSaida(BaseModel):
@@ -84,8 +99,8 @@ class PermissoesSaida(BaseModel):
 
     Campos:
         usuario: Dados do usuário.
-        permissoes: Nomes das permissões efetivas, em ordem alfabética.
+        permissoes: Mapa tabela -> autorização efetiva (cargo, ou usuário se houver).
     """
 
     usuario: UsuarioSaida
-    permissoes: list[str]
+    permissoes: dict[str, PermissaoSaida]

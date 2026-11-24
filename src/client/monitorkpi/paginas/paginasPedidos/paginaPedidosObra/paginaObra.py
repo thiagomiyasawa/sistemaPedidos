@@ -6,6 +6,7 @@ Reaproveita os cartões de `paginaPedidosGeral.graficos` que fazem sentido para 
 Execução:
     .venv\\Scripts\\python.exe "src/monitorkpi/paginas/paginasPedidos/paginaPedidosObra/paginaObra.py"
 """
+
 from __future__ import annotations
 
 import sys
@@ -19,16 +20,21 @@ if str(_SRC) not in sys.path:
 from PySide6.QtCore import QDate  # noqa: E402
 from PySide6.QtWidgets import QDateEdit  # noqa: E402
 
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import CartaoGrafico  # noqa: E402
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import (  # noqa: E402
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import (
+    CartaoGrafico,
+)  # noqa: E402
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import (  # noqa: E402
     PERIODO_PADRAO,
     PERIODOS,
     TODOS,
     tarefas_da_obra,
     valores_distintos,
 )
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.paginaBase import PaginaKPIBase, executar  # noqa: E402
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.graficos import (  # noqa: E402
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.paginaBase import (
+    PaginaKPIBase,
+    executar,
+)  # noqa: E402
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.graficos import (  # noqa: E402
     EvolucaoPedidos,
     PedidosPorStatus,
     TopProdutos,
@@ -81,7 +87,9 @@ class PaginaKPIPedidosObra(PaginaKPIBase):
         self.add_combo("tarefa", "Tarefa", [TODOS, *tarefas])
         self.add_combo("status", "Status", [TODOS, *valores_distintos("status_atual")])
         self.add_combo("origem", "Origem", [TODOS, *valores_distintos("origem")])
-        self.add_combo("periodo", "Período", [*PERIODOS, PERSONALIZADO], padrao=PERIODO_PADRAO)
+        self.add_combo(
+            "periodo", "Período", [*PERIODOS, PERSONALIZADO], padrao=PERIODO_PADRAO
+        )
         self.filtros["periodo"].currentIndexChanged.connect(self._atualizar_datas)
 
         hoje = QDate.currentDate()

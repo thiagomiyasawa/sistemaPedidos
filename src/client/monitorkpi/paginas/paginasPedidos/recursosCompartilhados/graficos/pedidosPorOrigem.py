@@ -1,4 +1,5 @@
 """Gráfico: pedidos por origem (pizza)."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -6,7 +7,10 @@ from collections import Counter
 from PySide6.QtCharts import QPieSeries
 from PySide6.QtGui import QColor
 
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import CORES, CartaoGrafico
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import (
+    CORES,
+    CartaoGrafico,
+)
 
 
 class PedidosPorOrigem(CartaoGrafico):

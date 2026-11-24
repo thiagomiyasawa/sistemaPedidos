@@ -4,6 +4,7 @@ Reúne os gráficos gerais da pasta `graficos`; todos obedecem a um filtro geral
 Execução:
     .venv\\Scripts\\python.exe "src/monitorkpi/paginas/paginasPedidos/paginaPedidosGeral/paginaGeral.py"
 """
+
 from __future__ import annotations
 
 import sys
@@ -14,15 +15,20 @@ _SRC = Path(__file__).resolve().parents[4]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import CartaoGrafico  # noqa: E402
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import (  # noqa: E402
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import (
+    CartaoGrafico,
+)  # noqa: E402
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import (  # noqa: E402
     PERIODO_PADRAO,
     PERIODOS,
     TODOS,
     valores_distintos,
 )
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.paginaBase import PaginaKPIBase, executar  # noqa: E402
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.graficos import (  # noqa: E402
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.paginaBase import (
+    PaginaKPIBase,
+    executar,
+)  # noqa: E402
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.graficos import (  # noqa: E402
     EvolucaoPedidos,
     PedidosPorObra,
     PedidosPorStatus,

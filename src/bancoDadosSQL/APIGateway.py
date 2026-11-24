@@ -40,16 +40,8 @@ if not __package__:  # executado como script: coloca `src` no sys.path
 from bancoDadosSQL.DIC import DIC
 from bancoDadosSQL.dbAdapterInterface import dbAdapterInterface
 from bancoDadosSQL.entidades.pedidos import Pedido
-from bancoDadosSQL.facedes.facedeAutorizacao import (
-    METRICAS_LER,
-    PEDIDOS_ALTERAR,
-    PEDIDOS_CRIAR,
-    PEDIDOS_LER,
-    PEDIDOS_REMOVER,
-    PEDIDOS_TODOS,
-    USUARIOS_GERENCIAR,
-)
 from bancoDadosSQL.facedes.interfaces.facedeAutorizacaoInterface import (
+    Permissao,
     facedeAutorizacaoInterface,
 )
 from bancoDadosSQL.facedes.interfaces.facedeAutenticacaoInterface import (
@@ -64,6 +56,7 @@ from bancoDadosSQL.formulariosAPI.admin import (
     AtualizarUsuarioEntrada,
     IdUsuario,
     ListarUsuariosEntrada,
+    PermissaoSaida,
     PermissaoUsuarioEntrada,
     PermissoesSaida,
     UsuarioSaida,
@@ -122,18 +115,22 @@ _esquema_api_key = APIKeyHeader(name=CABECALHO_API_KEY, auto_error=False)
 ROTAS_PUBLICAS = frozenset({"/login", "/registro"})
 
 
-def exige(permissao: str) -> Callable[..., None]:
-    """Cria a dependência que exige uma permissão do usuário autenticado.
+def exige(tabela: str, acao: str, todos: bool = False) -> Callable[..., None]:
+    """Cria a dependência que exige uma ação sobre uma tabela do usuário autenticado.
 
     Args:
-        permissao: permissão necessária (ver `facedeAutorizacao.PERMISSOES`).
+        tabela: tabela protegida (ex.: "pedido"), como cadastrada em `tabelas`.
+        acao: "criar", "atualizar", "deletar" ou "ler".
+        todos: se True, exige também a autorização sobre registros de qualquer dono
+            (usado nas rotas que agregam dados de todos os usuários).
 
     Returns:
-        Callable[..., None]: dependência do FastAPI; responde 403 se faltar a permissão.
+        Callable[..., None]: dependência do FastAPI; responde 403 se não autorizado.
     """
 
     def _verifica(ident: Annotated[Identidade, Depends(identidade_atual)]) -> None:
-        if permissao not in ident.permissoes:
+        p = ident.permissoes.get(tabela)
+        if p is None or not p.permite(acao) or (todos and not p.todos):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Permissão insuficiente")
 
     return _verifica
@@ -293,21 +290,22 @@ class APIGateway:
             )
         with self._sessao(self._autorizacao_factory) as a:
             identidade = replace(
-                identidade, permissoes=a.permissoes(identidade.user_id, identidade.cargo))
+                identidade, permissoes=a.permissoes(identidade.user_id, identidade.cargo_id))
         request.state.identidade = identidade
         return identidade
 
     @staticmethod
-    def _admin(ident: Identidade) -> bool:
-        """Indica se o usuário tem a permissão `pedidos:todos` (pedidos de qualquer dono).
+    def _ve_todos(ident: Identidade) -> bool:
+        """Indica se o usuário atua sobre pedidos de qualquer dono (`pedido.todos`).
 
         Args:
             ident: identidade do usuário autenticado.
 
         Returns:
-            bool: True se `PEDIDOS_TODOS` está nas permissões efetivas.
+            bool: True se a permissão efetiva de `pedido` tem `todos`.
         """
-        return PEDIDOS_TODOS in ident.permissoes
+        p = ident.permissoes.get("pedido")
+        return p is not None and p.todos
 
     @staticmethod
     def _obter_ou_404(
@@ -318,7 +316,7 @@ class APIGateway:
     ) -> Pedido:
         """Obtém um pedido do usuário ou falha com 404.
 
-        Pedido de outro usuário (ou sem dono) também dá 404 para quem não é admin,
+        Pedido de outro usuário (ou sem dono) também dá 404 para quem não tem `todos`,
         para não revelar que o id existe.
 
         Args:
@@ -335,7 +333,7 @@ class APIGateway:
         """
         pedido = f.obter(pedido_id, com_itens)
         if pedido is None or not (
-            APIGateway._admin(ident) or pedido.user_id == ident.user_id
+            APIGateway._ve_todos(ident) or pedido.user_id == ident.user_id
         ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         return pedido
@@ -350,47 +348,55 @@ class APIGateway:
         self.app.add_api_route("/health", self.health, methods=["GET"], tags=["infra"])
 
         self.app.add_api_route("/login", self.login, methods=["POST"], tags=["auth"])
+        self.app.add_api_route("/logout", self.logout, methods=["POST"], tags=["auth"],
+                               status_code=status.HTTP_204_NO_CONTENT)
         self.app.add_api_route("/registro", self.registrar_usuario, methods=["POST"],
                                tags=["auth"], status_code=status.HTTP_201_CREATED)
 
-        def perm(p: str) -> list[Any]:
-            return [Depends(exige(p))]
+        def perm(tabela: str, acao: str, todos: bool = False) -> list[Any]:
+            return [Depends(exige(tabela, acao, todos))]
 
         r = APIRouter(prefix="/pedidos", tags=["pedidos"])
-        r.add_api_route("", self.listar_pedidos, methods=["GET"], dependencies=perm(PEDIDOS_LER))
-        r.add_api_route("", self.criar_pedido, methods=["POST"], dependencies=perm(PEDIDOS_CRIAR),
+        r.add_api_route("", self.listar_pedidos, methods=["GET"],
+                        dependencies=perm("pedido", "ler"))
+        r.add_api_route("", self.criar_pedido, methods=["POST"], dependencies=perm("pedido", "criar"),
                         status_code=status.HTTP_201_CREATED)
         r.add_api_route("/{pedido_id}", self.obter_pedido, methods=["GET"],
-                        dependencies=perm(PEDIDOS_LER))
+                        dependencies=perm("pedido", "ler"))
         r.add_api_route("/{pedido_id}", self.atualizar_pedido, methods=["PATCH"],
-                        dependencies=perm(PEDIDOS_ALTERAR))
+                        dependencies=perm("pedido", "atualizar"))
         r.add_api_route("/{pedido_id}", self.remover_pedido, methods=["DELETE"],
-                        dependencies=perm(PEDIDOS_REMOVER), status_code=status.HTTP_204_NO_CONTENT)
+                        dependencies=perm("pedido", "deletar"), status_code=status.HTTP_204_NO_CONTENT)
         r.add_api_route("/{pedido_id}/itens", self.listar_itens, methods=["GET"],
-                        dependencies=perm(PEDIDOS_LER))
+                        dependencies=perm("item_pedido", "ler"))
         r.add_api_route("/{pedido_id}/itens", self.adicionar_item, methods=["POST"],
-                        dependencies=perm(PEDIDOS_ALTERAR), status_code=status.HTTP_201_CREATED)
+                        dependencies=perm("item_pedido", "criar"), status_code=status.HTTP_201_CREATED)
         self.app.include_router(r)
 
         ri = APIRouter(prefix="/itens", tags=["itens"])
-        ri.add_api_route("/top", self.top_itens, methods=["GET"], dependencies=perm(METRICAS_LER))
+        ri.add_api_route("/top", self.top_itens, methods=["GET"],
+                         dependencies=perm("pedido", "ler", todos=True))
         self.app.include_router(ri)
 
         self.app.add_api_route("/filtros", self.valores_filtros, methods=["GET"],
-                               tags=["itens"], dependencies=perm(METRICAS_LER))
+                               tags=["itens"], dependencies=perm("pedido", "ler", todos=True))
         self.app.add_api_route("/filtros/tarefas", self.tarefas_da_obra, methods=["GET"],
-                               tags=["itens"], dependencies=perm(METRICAS_LER))
+                               tags=["itens"], dependencies=perm("pedido", "ler", todos=True))
 
-        # Administração de usuários e permissões: exige `usuarios:gerenciar`.
-        ra = APIRouter(prefix="/admin/usuarios", tags=["admin"],
-                       dependencies=perm(USUARIOS_GERENCIAR))
-        ra.add_api_route("", self.listar_usuarios, methods=["GET"])
-        ra.add_api_route("/{user_id}", self.atualizar_usuario, methods=["PATCH"])
-        ra.add_api_route("/{user_id}/permissoes", self.permissoes_do_usuario, methods=["GET"])
-        ra.add_api_route("/{user_id}/permissoes/{permissao}", self.definir_permissao,
-                         methods=["PUT"], status_code=status.HTTP_204_NO_CONTENT)
-        ra.add_api_route("/{user_id}/permissoes/{permissao}", self.remover_permissao,
-                         methods=["DELETE"], status_code=status.HTTP_204_NO_CONTENT)
+        # Administração de usuários e permissões (tabelas `usuario` e `usuario_permissao`).
+        ra = APIRouter(prefix="/admin/usuarios", tags=["admin"])
+        ra.add_api_route("", self.listar_usuarios, methods=["GET"],
+                         dependencies=perm("usuario", "ler", todos=True))
+        ra.add_api_route("/{user_id}", self.atualizar_usuario, methods=["PATCH"],
+                         dependencies=perm("usuario", "atualizar", todos=True))
+        ra.add_api_route("/{user_id}/permissoes", self.permissoes_do_usuario, methods=["GET"],
+                         dependencies=perm("usuario_permissao", "ler"))
+        ra.add_api_route("/{user_id}/permissoes/{tabela}", self.definir_permissao,
+                         methods=["PUT"], status_code=status.HTTP_204_NO_CONTENT,
+                         dependencies=perm("usuario_permissao", "atualizar"))
+        ra.add_api_route("/{user_id}/permissoes/{tabela}", self.remover_permissao,
+                         methods=["DELETE"], status_code=status.HTTP_204_NO_CONTENT,
+                         dependencies=perm("usuario_permissao", "deletar"))
         self.app.include_router(ra)
 
     # --- administração de usuários ------------------------------------------
@@ -437,13 +443,13 @@ class APIGateway:
             return UsuarioSaida.model_validate(a.obter_usuario(user_id))
 
     def permissoes_do_usuario(self, user_id: IdUsuario) -> PermissoesSaida:
-        """Permissões efetivas de um usuário (cargo + exceções).
+        """Permissões efetivas de um usuário por tabela (a do usuário substitui a do cargo).
 
         Args:
             user_id: usuário consultado.
 
         Returns:
-            PermissoesSaida: usuário e permissões em ordem alfabética.
+            PermissoesSaida: usuário e autorização efetiva por tabela.
 
         Raises:
             HTTPException: 404 se o usuário não existir.
@@ -452,48 +458,52 @@ class APIGateway:
             u = a.obter_usuario(user_id)
             if u is None:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuário não encontrado")
-            return PermissoesSaida(usuario=UsuarioSaida.model_validate(u),
-                                   permissoes=sorted(a.permissoes(u["id"], u["cargo"])))
+            efetivas = a.permissoes(u["id"], u["cargo_id"])
+            return PermissoesSaida(
+                usuario=UsuarioSaida.model_validate(u),
+                permissoes={t: PermissaoSaida(**asdict(p)) for t, p in sorted(efetivas.items())})
 
     def definir_permissao(
-        self, user_id: IdUsuario, permissao: str, corpo: PermissaoUsuarioEntrada
+        self, user_id: IdUsuario, tabela: str, corpo: PermissaoUsuarioEntrada
     ) -> None:
-        """Concede ou nega uma permissão a um usuário, além do que o cargo define.
+        """Define a autorização do usuário sobre uma tabela, no lugar da do cargo.
 
         Args:
             user_id: usuário alvo.
-            permissao: nome da permissão.
-            corpo: `concedida` True concede, False nega.
+            tabela: tabela cadastrada em `tabelas`.
+            corpo: ações permitidas (o que não vier fica False).
 
         Returns:
             None (status 204).
 
         Raises:
-            HTTPException: 404 se o usuário não existir; 422 se a permissão for desconhecida.
+            HTTPException: 404 se o usuário não existir; 422 se a tabela for desconhecida.
         """
         with self._sessao(self._autorizacao_factory) as a:
-            if not a.definir_permissao_usuario(user_id, permissao, corpo.concedida):
+            if not a.definir_permissao_usuario(user_id, tabela, Permissao(**corpo.model_dump())):
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuário não encontrado")
 
-    def remover_permissao(self, user_id: IdUsuario, permissao: str) -> None:
-        """Remove a exceção do usuário (volta a valer o cargo).
+    def remover_permissao(self, user_id: IdUsuario, tabela: str) -> None:
+        """Remove a linha do usuário para a tabela (volta a valer a do cargo).
 
         Args:
             user_id: usuário alvo.
-            permissao: nome da permissão.
+            tabela: nome da tabela.
 
         Returns:
             None (status 204).
 
         Raises:
-            HTTPException: 404 se não havia exceção; 422 se a permissão for desconhecida.
+            HTTPException: 404 se não havia linha do usuário para a tabela.
         """
         with self._sessao(self._autorizacao_factory) as a:
-            if not a.remover_permissao_usuario(user_id, permissao):
-                raise HTTPException(status.HTTP_404_NOT_FOUND, "Exceção de permissão não encontrada")
+            if not a.remover_permissao_usuario(user_id, tabela):
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Permissão do usuário não encontrada")
 
     def login(self, corpo: LoginEntrada) -> LoginSaida:
         """Troca nome e senha por uma chave de API (rota pública).
+
+        Se o usuário já tem uma chave não vencida, devolve a mesma chave.
 
         Args:
             corpo: nome e senha do usuário.
@@ -509,6 +519,23 @@ class APIGateway:
         if emitida is None:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuário ou senha inválidos")
         return LoginSaida(chave=emitida[0], expira_em=emitida[1])
+
+    def logout(
+        self, chave: Annotated[str | None, Security(_esquema_api_key)] = None
+    ) -> None:
+        """Revoga a chave de API da requisição (a autenticação global já a validou).
+
+        Como o login reaproveita a chave vigente, o logout encerra a sessão em todos
+        os dispositivos que a compartilham.
+
+        Args:
+            chave: valor do cabeçalho `X-API-Key`.
+
+        Returns:
+            None (status 204).
+        """
+        with self._sessao(self._autenticacao_factory) as f:
+            f.logout(chave or "")
 
     def registrar_usuario(self, corpo: RegistroEntrada) -> RegistroSaida:
         """Registra um usuário novo, inativo até alguém validar o registro (rota pública).
@@ -549,7 +576,7 @@ class APIGateway:
 
         Args:
             filtros: parâmetros de query (obra, status_atual, limit, offset).
-            ident: usuário autenticado (não admin vê só os próprios pedidos).
+            ident: usuário autenticado (sem `todos` em `pedido`, vê só os próprios pedidos).
 
         Returns:
             ListarPedidosSaida: lista de pedidos (sem itens).
@@ -560,7 +587,7 @@ class APIGateway:
                 filtros.status_atual,
                 filtros.limit,
                 filtros.offset,
-                None if self._admin(ident) else ident.user_id,
+                None if self._ve_todos(ident) else ident.user_id,
             )
             return [PedidoSaida.model_validate(p) for p in pedidos]
 

@@ -43,16 +43,24 @@ def main() -> None:
     """
     servidor = subprocess.Popen(
         [
-            sys.executable, "-m", "uvicorn", "bancoDadosSQL.APIGateway:app",
-            "--host", HOST, "--port", str(PORTA),
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "bancoDadosSQL.APIGateway:app",
+            "--host",
+            HOST,
+            "--port",
+            str(PORTA),
         ]
     )
     try:
         if not _aguardar_servidor(servidor):
             raise SystemExit("Servidor não iniciou.")
         # Descomente apenas uma das páginas por vez.
-        #from monitorkpi.paginas.paginasPedidos.paginaPedidosGeral.paginaGeral import main as cliente
-        from monitorkpi.paginas.paginasPedidos.paginaPedidosObra.paginaObra import main as cliente
+        # from monitorkpi.paginas.paginasPedidos.paginaPedidosGeral.paginaGeral import main as cliente
+        from client.monitorkpi.paginas.paginasPedidos.paginaPedidosObra.paginaObra import (
+            main as cliente,
+        )
 
         cliente()
     finally:

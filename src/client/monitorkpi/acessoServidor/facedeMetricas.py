@@ -9,17 +9,25 @@ Uso:
         top = metricas.top_itens(obra="Subestação Alfa", dias=7, limite=5)
         # [("Parafuso M12", 131), ("Quadro de comando", 33), ...]
 """
+
 from __future__ import annotations
 
 from datetime import date
 from typing import Self
 
-from monitorkpi.acessoServidor.adapterAPI import AdapterAPI
-from monitorkpi.acessoServidor.formulariosAPI import topItens, valoresFiltros
-from monitorkpi.acessoServidor.formulariosAPI.topItens import TopItensEntrada
-from monitorkpi.acessoServidor.formulariosAPI.valoresFiltros import TarefasEntrada
-from monitorkpi.acessoServidor.interfaces.adapterAPIInterface import adapterAPIInterface
-from monitorkpi.acessoServidor.interfaces.facedeMetricasAPIInterface import facedeMetricasAPIInterface
+from client.monitorkpi.acessoServidor.adapterAPI import AdapterAPI
+from client.monitorkpi.acessoServidor.formulariosAPI import topItens
+from client.monitorkpi.acessoServidor.formulariosAPI import valoresFiltros
+from client.monitorkpi.acessoServidor.formulariosAPI.topItens import TopItensEntrada
+from client.monitorkpi.acessoServidor.formulariosAPI.valoresFiltros import (
+    TarefasEntrada,
+)
+from client.monitorkpi.acessoServidor.interfaces.adapterAPIInterface import (
+    adapterAPIInterface,
+)
+from client.monitorkpi.acessoServidor.interfaces.facedeMetricasAPIInterface import (
+    facedeMetricasAPIInterface,
+)
 
 
 class FacedeMetricasAPI(facedeMetricasAPIInterface):
@@ -93,14 +101,24 @@ class FacedeMetricasAPI(facedeMetricasAPIInterface):
                 antes de chamar a API).
             ApiError: em falha de comunicação com a API.
         """
-        filtro = TarefasEntrada(obra=obra)  # valida antes de chamar: sem obra, nem requisita
-        return valoresFiltros.para_lista(self.api.get("/filtros/tarefas", **filtro.params()))
+        filtro = TarefasEntrada(
+            obra=obra
+        )  # valida antes de chamar: sem obra, nem requisita
+        return valoresFiltros.para_lista(
+            self.api.get("/filtros/tarefas", **filtro.params())
+        )
 
-    def top_itens(self, obra: str | None = None, tarefa: str | None = None,
-                  status_atual: str | None = None, origem: str | None = None,
-                  dias: int | None = None,
-                  de: date | None = None, ate: date | None = None,
-                  limite: int = 10) -> list[tuple[str, int]]:
+    def top_itens(
+        self,
+        obra: str | None = None,
+        tarefa: str | None = None,
+        status_atual: str | None = None,
+        origem: str | None = None,
+        dias: int | None = None,
+        de: date | None = None,
+        ate: date | None = None,
+        limite: int = 10,
+    ) -> list[tuple[str, int]]:
         """Obtém os produtos mais pedidos (soma de quantidade).
 
         Args:
@@ -120,6 +138,14 @@ class FacedeMetricasAPI(facedeMetricasAPIInterface):
             ValueError: se os filtros forem inválidos (validação do formulário).
             ApiError: em falha de comunicação com a API.
         """
-        filtro = TopItensEntrada(obra=obra, tarefa=tarefa, status_atual=status_atual,
-                                 origem=origem, dias=dias, de=de, ate=ate, limite=limite)
+        filtro = TopItensEntrada(
+            obra=obra,
+            tarefa=tarefa,
+            status_atual=status_atual,
+            origem=origem,
+            dias=dias,
+            de=de,
+            ate=ate,
+            limite=limite,
+        )
         return topItens.para_tuplas(self.api.get("/itens/top", **filtro.params()))

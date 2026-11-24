@@ -5,9 +5,11 @@ emite chaves a partir de usuário e senha.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol, runtime_checkable
+
+from .facedeAutorizacaoInterface import Permissao
 
 
 @dataclass(frozen=True)
@@ -16,13 +18,16 @@ class Identidade:
 
     Attributes:
         user_id: id do usuário (`usuario.id`).
-        cargo: cargo do usuário (`usuario.cargo`).
-        permissoes: permissões efetivas (preenchidas pelo gateway a cada requisição).
+        cargo_id: id do cargo do usuário (`usuario.cargo_id`).
+        cargo: nome do cargo.
+        permissoes: permissões efetivas por tabela (preenchidas pelo gateway a cada
+            requisição).
     """
 
     user_id: int
+    cargo_id: int
     cargo: str
-    permissoes: frozenset[str] = frozenset()
+    permissoes: dict[str, Permissao] = field(default_factory=dict)
 
 
 @runtime_checkable
@@ -45,15 +50,29 @@ class facedeAutenticacaoInterface(Protocol):
         ...
 
     def login(self, nome: str, senha: str) -> tuple[str, datetime] | None:
-        """Valida usuário e senha e emite uma nova chave de API.
+        """Valida usuário e senha e devolve a chave de API do usuário.
+
+        Se o usuário já tem uma chave não vencida, devolve essa mesma; senão emite
+        uma nova.
 
         Args:
             nome: nome do usuário.
             senha: senha em texto puro informada no login.
 
         Returns:
-            tuple[str, datetime] | None: (chave, vencimento em UTC) da chave
-            recém-criada; None se usuário inexistente, inativo ou senha incorreta.
+            tuple[str, datetime] | None: (chave, vencimento em UTC); None se
+            usuário inexistente, inativo ou senha incorreta.
+        """
+        ...
+
+    def logout(self, chave: str) -> bool:
+        """Revoga a chave (apaga do armazenamento).
+
+        Args:
+            chave: chave a revogar.
+
+        Returns:
+            bool: True se a chave existia e foi removida.
         """
         ...
 

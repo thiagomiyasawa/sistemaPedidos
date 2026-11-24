@@ -1,4 +1,5 @@
 """`CartaoGrafico`: cartão base de todos os gráficos das páginas de pedidos."""
+
 from __future__ import annotations
 
 from abc import abstractmethod
@@ -25,7 +26,9 @@ from PySide6.QtWidgets import (
 )
 
 from bancoDadosSQL.entidades.pedidos import Pedido
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import DadosPedidos
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import (
+    DadosPedidos,
+)
 
 CORES = ["#2E86AB", "#F6AE2D", "#3BB273", "#E15554", "#7768AE", "#F26419", "#33658A"]
 
@@ -48,7 +51,9 @@ class CartaoGrafico(QFrame):
     """
 
     titulo = "Gráfico"
-    precisa_top_itens = False  # True se o gráfico usa o top de itens (consulta de métricas)
+    precisa_top_itens = (
+        False  # True se o gráfico usa o top de itens (consulta de métricas)
+    )
 
     def __init__(self) -> None:
         """Monta o cartão (título, barra de opções, gráfico e rótulo de vazio).
@@ -62,8 +67,12 @@ class CartaoGrafico(QFrame):
         super().__init__()
         self.setObjectName("cartao")
         self.setMinimumSize(460, 380)
-        self.filtros: dict[str, QWidget] = {}  # opções próprias do gráfico (não filtram pedidos)
-        self.dados: DadosPedidos | None = None  # entregues pela página (ela faz as requisições)
+        self.filtros: dict[
+            str, QWidget
+        ] = {}  # opções próprias do gráfico (não filtram pedidos)
+        self.dados: DadosPedidos | None = (
+            None  # entregues pela página (ela faz as requisições)
+        )
 
         self.chart = QChart()
         # O tema padrão do QChart tem texto escuro; com o tema escuro do sistema ele some no fundo.
@@ -113,7 +122,9 @@ class CartaoGrafico(QFrame):
         self._add_filtro(chave, rotulo, cb)
         return cb
 
-    def add_spin(self, chave: str, rotulo: str, minimo: int, maximo: int, valor: int) -> QSpinBox:
+    def add_spin(
+        self, chave: str, rotulo: str, minimo: int, maximo: int, valor: int
+    ) -> QSpinBox:
         """Adiciona à barra de opções um campo numérico que redesenha o gráfico ao mudar.
 
         Args:
@@ -196,7 +207,9 @@ class CartaoGrafico(QFrame):
         self.view.setVisible(tem_dados)
         self.lbl_vazio.setVisible(not tem_dados)
 
-    def eixos_categoria(self, serie, categorias: list[str], horizontal: bool = False) -> None:
+    def eixos_categoria(
+        self, serie, categorias: list[str], horizontal: bool = False
+    ) -> None:
         """Anexa eixo de categorias + eixo de valores inteiros à série.
 
         Adiciona a série ao gráfico e ajusta a escala do eixo de valores ao maior valor da série.
@@ -217,20 +230,31 @@ class CartaoGrafico(QFrame):
         val.setTickType(QValueAxis.TicksDynamic)
         val.setTickInterval(1)
         val.setMin(0)
-        pos_cat, pos_val = (Qt.AlignLeft, Qt.AlignBottom) if horizontal else (Qt.AlignBottom, Qt.AlignLeft)
+        pos_cat, pos_val = (
+            (Qt.AlignLeft, Qt.AlignBottom)
+            if horizontal
+            else (Qt.AlignBottom, Qt.AlignLeft)
+        )
         self.chart.addAxis(cat, pos_cat)
         self.chart.addAxis(val, pos_val)
         serie.attachAxis(cat)
         serie.attachAxis(val)
-        maximo = max((s.at(i) for s in serie.barSets() for i in range(s.count())), default=1)
+        maximo = max(
+            (s.at(i) for s in serie.barSets() for i in range(s.count())), default=1
+        )
         val.setRange(0, max(1, maximo * 1.15))
         val.applyNiceNumbers()
         if maximo > 8:
             val.setTickType(QValueAxis.TicksFixed)
             val.setTickCount(6)
 
-    def barras(self, rotulos: list[str], valores: list[float], horizontal: bool = False,
-               cor: str = CORES[0]) -> None:
+    def barras(
+        self,
+        rotulos: list[str],
+        valores: list[float],
+        horizontal: bool = False,
+        cor: str = CORES[0],
+    ) -> None:
         """Desenha um gráfico de barras de uma única série ("Quantidade") com rótulos de valor.
 
         Args:

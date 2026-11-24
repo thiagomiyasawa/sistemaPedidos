@@ -4,6 +4,7 @@ Cada página (geral, por obra) herda `PaginaKPIBase` e define só o que é seu: 
 quais filtros e como montar o dicionário de filtros. A requisição à API é feita aqui, uma vez
 por atualização, e o resultado é entregue a todos os gráficos.
 """
+
 from __future__ import annotations
 
 import sys
@@ -24,10 +25,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from monitorkpi.acessoServidor.interfaces.adapterAPIInterface import ApiError
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import CartaoGrafico
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import carregar_dados
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.estilo import ESTILO
+from client.monitorkpi.acessoServidor.interfaces.adapterAPIInterface import ApiError
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import (
+    CartaoGrafico,
+)
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import (
+    carregar_dados,
+)
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.estilo import (
+    ESTILO,
+)
 
 
 class PaginaKPIBase(QWidget):
@@ -147,8 +154,14 @@ class PaginaKPIBase(QWidget):
         self.barra.addWidget(caixa)
         return caixa
 
-    def add_combo(self, chave: str, rotulo: str, itens: list[str], padrao: str | None = None,
-                  ao_mudar: Callable[[], None] | None = None) -> QComboBox:
+    def add_combo(
+        self,
+        chave: str,
+        rotulo: str,
+        itens: list[str],
+        padrao: str | None = None,
+        ao_mudar: Callable[[], None] | None = None,
+    ) -> QComboBox:
         """Adiciona um combo de filtro à barra e o registra em `filtros`.
 
         Args:
@@ -183,7 +196,10 @@ class PaginaKPIBase(QWidget):
             None.
         """
         try:
-            dados = carregar_dados(self.filtros_atuais(), com_top_itens=any(c.precisa_top_itens for c in self.cartoes))
+            dados = carregar_dados(
+                self.filtros_atuais(),
+                com_top_itens=any(c.precisa_top_itens for c in self.cartoes),
+            )
         except ApiError as e:
             for c in self.cartoes:
                 c.mostrar_erro(e)

@@ -4,7 +4,10 @@ Reexporta `CartaoGrafico` (classe base) e as classes concretas de gráfico
 (`EvolucaoPedidos`, `PedidosPorObra`, `PedidosPorOrigem`, `PedidosPorStatus`,
 `StatusPorObra`, `TopProdutos`), listadas em `__all__`.
 """
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import CartaoGrafico
+
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import (
+    CartaoGrafico,
+)
 from .evolucaoPedidos import EvolucaoPedidos
 from .pedidosPorObra import PedidosPorObra
 from .pedidosPorOrigem import PedidosPorOrigem

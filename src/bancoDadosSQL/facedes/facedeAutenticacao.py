@@ -13,6 +13,7 @@ Uso:
         chave, expira = f.login("ana", "segredo")
         ok = f.autenticar(chave)
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -21,11 +22,14 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from ..dbAdapterInterface import dbAdapterInterface
-from .interfaces.facedeAutenticacaoInterface import Identidade, facedeAutenticacaoInterface
+from .interfaces.facedeAutenticacaoInterface import (
+    Identidade,
+    facedeAutenticacaoInterface,
+)
 
 _FORMATO_DATA = "%Y-%m-%d %H:%M:%S"  # como `datetime('now')` do SQLite (UTC, texto)
 VALIDADE_PADRAO = timedelta(hours=8)
-CARGO_PENDENTE = "pendente"  # `usuario.cargo` é NOT NULL: o validador define o cargo real
+CARGO_PENDENTE = "pendente"  # cargo (tabela `cargos`) dado no registro, sem permissões
 _SCRYPT = {"n": 2**14, "r": 8, "p": 1}
 
 
@@ -76,7 +80,9 @@ class FacedeAutenticacao(facedeAutenticacaoInterface):
         validade: duração das chaves emitidas no login.
     """
 
-    def __init__(self, db: dbAdapterInterface, validade: timedelta = VALIDADE_PADRAO) -> None:
+    def __init__(
+        self, db: dbAdapterInterface, validade: timedelta = VALIDADE_PADRAO
+    ) -> None:
         """Inicializa o facade com o adapter de banco.
 
         Args:
@@ -89,7 +95,7 @@ class FacedeAutenticacao(facedeAutenticacaoInterface):
     def registrar(self, nome: str, senha: str) -> int | None:
         """Cria um usuário novo, inativo (`ativo = 0`) até alguém validar o registro.
 
-        O cargo inicial é `CARGO_PENDENTE` (coluna NOT NULL). O nome é verificado
+        O cargo inicial é `CARGO_PENDENTE` (precisa existir em `cargos`). O nome é verificado
         sem diferenciar maiúsculas no mesmo INSERT (além do UNIQUE da tabela); o
         id vem da chave primária da tabela.
 
@@ -101,8 +107,8 @@ class FacedeAutenticacao(facedeAutenticacaoInterface):
             int | None: id do usuário criado; None se o nome já estiver em uso.
         """
         cur = self.db.execute(
-            "INSERT INTO usuario (nome, senha, cargo, ativo) "
-            "SELECT ?, ?, ?, 0 "
+            "INSERT INTO usuario (nome, senha, cargo_id, ativo) "
+            "SELECT ?, ?, (SELECT id FROM cargos WHERE nome = ?), 0 "
             "WHERE NOT EXISTS (SELECT 1 FROM usuario WHERE nome = ? COLLATE NOCASE)",
             (nome, hash_senha(senha), CARGO_PENDENTE, nome),
         )
@@ -111,30 +117,74 @@ class FacedeAutenticacao(facedeAutenticacaoInterface):
         return self.db.fetch_one("SELECT id FROM usuario WHERE nome = ?", (nome,))["id"]
 
     def login(self, nome: str, senha: str) -> tuple[str, datetime] | None:
-        """Valida usuário e senha e emite uma nova chave de API.
+        """Valida usuário e senha e devolve a chave de API do usuário.
+
+        Se o usuário já tem uma chave não vencida, devolve essa mesma (a de maior
+        validade); senão emite uma nova. As chaves vencidas dele são apagadas.
 
         Args:
             nome: nome do usuário.
             senha: senha em texto puro.
 
         Returns:
-            tuple[str, datetime] | None: (chave, vencimento em UTC) da chave
-            gravada em `chavesAPI`; None se usuário inexistente, inativo
-            (`usuario.ativo` diferente de 1) ou senha incorreta.
+            tuple[str, datetime] | None: (chave, vencimento em UTC); None se
+            usuário inexistente, inativo (`usuario.ativo` diferente de 1) ou
+            senha incorreta.
         """
-        usuario = self.db.fetch_one("SELECT id, senha, ativo FROM usuario WHERE nome = ?", (nome,))
+        usuario = self.db.fetch_one(
+            "SELECT id, senha, ativo FROM usuario WHERE nome = ?", (nome,)
+        )
         senha_ok = _confere_senha(senha, usuario["senha"] if usuario else _HASH_FALSO)
         # Usuário inativo é recusado só depois de conferir a senha, com a mesma
         # resposta de credencial inválida (não revela que a conta existe).
         if usuario is None or not senha_ok or usuario["ativo"] != 1:
             return None
+        with self.db.transaction():
+            self.db.execute(
+                "DELETE FROM chavesAPI WHERE user_id = ? AND DateTime_exp <= datetime('now')",
+                (usuario["id"],),
+            )
+            vigente = self.db.fetch_one(
+                "SELECT chave, DateTime_exp FROM chavesAPI "
+                "WHERE user_id = ? AND DateTime_exp > datetime('now') "
+                "ORDER BY DateTime_exp DESC LIMIT 1",
+                (usuario["id"],),
+            )
+            if vigente is not None:
+                expira_existente = datetime.strptime(
+                    vigente["DateTime_exp"], _FORMATO_DATA
+                ).replace(tzinfo=UTC)
+                return vigente["chave"], expira_existente
+            return self._emitir(usuario["id"])
+
+    def _emitir(self, user_id: int) -> tuple[str, datetime]:
+        """Grava uma chave nova para o usuário.
+
+        Args:
+            user_id: id do usuário.
+
+        Returns:
+            tuple[str, datetime]: (chave, vencimento em UTC).
+        """
         chave = secrets.token_urlsafe(32)
         expira = (datetime.now(UTC) + self.validade).replace(microsecond=0)
         self.db.execute(
             "INSERT INTO chavesAPI (chave, user_id, DateTime_exp) VALUES (?, ?, ?)",
-            (chave, usuario["id"], expira.strftime(_FORMATO_DATA)),
+            (chave, user_id, expira.strftime(_FORMATO_DATA)),
         )
         return chave, expira
+
+    def logout(self, chave: str) -> bool:
+        """Revoga a chave (apaga de `chavesAPI`).
+
+        Args:
+            chave: chave a revogar.
+
+        Returns:
+            bool: True se a chave existia e foi removida.
+        """
+        cur = self.db.execute("DELETE FROM chavesAPI WHERE chave = ?", (chave,))
+        return cur.rowcount > 0
 
     def autenticar(self, chave: str | None) -> Identidade | None:
         """Verifica se a chave existe, não está vencida e é de usuário ativo.
@@ -154,8 +204,9 @@ class FacedeAutenticacao(facedeAutenticacaoInterface):
         # Uma consulta só: `valida` é 1 (futuro), 0 (vencida) ou NULL (sem validade).
         linha = self.db.fetch_one(
             "SELECT c.DateTime_exp > datetime('now') AS valida, u.id AS user_id, "
-            "u.cargo AS cargo, u.ativo AS ativo "
-            "FROM chavesAPI c JOIN usuario u ON u.id = c.user_id WHERE c.chave = ?",
+            "u.cargo_id AS cargo_id, g.nome AS cargo, u.ativo AS ativo "
+            "FROM chavesAPI c JOIN usuario u ON u.id = c.user_id "
+            "JOIN cargos g ON g.id = u.cargo_id WHERE c.chave = ?",
             (chave,),
         )
         if linha is None:
@@ -165,4 +216,6 @@ class FacedeAutenticacao(facedeAutenticacaoInterface):
             return None
         if linha["valida"] != 1 or linha["ativo"] != 1:
             return None
-        return Identidade(user_id=linha["user_id"], cargo=linha["cargo"])
+        return Identidade(
+            user_id=linha["user_id"], cargo_id=linha["cargo_id"], cargo=linha["cargo"]
+        )

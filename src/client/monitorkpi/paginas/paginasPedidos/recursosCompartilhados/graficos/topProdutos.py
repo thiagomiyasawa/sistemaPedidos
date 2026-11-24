@@ -1,8 +1,14 @@
 """Gráfico: produtos mais solicitados por quantidade (barras horizontais)."""
+
 from __future__ import annotations
 
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import CORES, CartaoGrafico
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import LIMITE_TOP_ITENS
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import (
+    CORES,
+    CartaoGrafico,
+)
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import (
+    LIMITE_TOP_ITENS,
+)
 
 
 class TopProdutos(CartaoGrafico):
@@ -14,7 +20,9 @@ class TopProdutos(CartaoGrafico):
     """
 
     titulo = "Produtos mais solicitados (quantidade)"
-    precisa_top_itens = True  # a página consulta o facade de métricas e entrega o top pronto
+    precisa_top_itens = (
+        True  # a página consulta o facade de métricas e entrega o top pronto
+    )
 
     def construir_filtros(self) -> None:
         """Cria o campo numérico "Top" (de 3 até `LIMITE_TOP_ITENS`, padrão 5).
@@ -36,8 +44,13 @@ class TopProdutos(CartaoGrafico):
         Returns:
             None. Desenha as barras horizontais, ou exibe a mensagem de vazio se não há itens.
         """
-        linhas = self.top_itens()[:self.valor("topn")]  # já vem do maior para o menor
+        linhas = self.top_itens()[: self.valor("topn")]  # já vem do maior para o menor
         self.mostrar(bool(linhas))
         if linhas:
             linhas = linhas[::-1]  # maior no topo no gráfico horizontal
-            self.barras([pr for pr, _ in linhas], [q for _, q in linhas], horizontal=True, cor=CORES[1])
+            self.barras(
+                [pr for pr, _ in linhas],
+                [q for _, q in linhas],
+                horizontal=True,
+                cor=CORES[1],
+            )

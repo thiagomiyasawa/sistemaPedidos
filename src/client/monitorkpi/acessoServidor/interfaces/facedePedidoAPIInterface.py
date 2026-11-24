@@ -5,6 +5,7 @@ precisa além dele: `health`, `listar_todos` e o ciclo de vida (`close`, `with`)
 Satisfazem este contrato `FacedePedidoAPI` (via HTTP) e `FacedePedidoTeste` (direto no
 banco), podendo ser trocados no `DIC` sem alterar quem os usa.
 """
+
 from __future__ import annotations
 
 from typing import Protocol, Self, runtime_checkable
@@ -12,7 +13,7 @@ from typing import Protocol, Self, runtime_checkable
 from bancoDadosSQL.entidades.pedidos import Pedido
 from bancoDadosSQL.facedes.interfaces.facedePedidoInterface import facedePedidoInterface
 
-from monitorkpi.acessoServidor.interfaces.adapterAPIInterface import Json
+from client.monitorkpi.acessoServidor.interfaces.adapterAPIInterface import Json
 
 
 @runtime_checkable
@@ -27,8 +28,12 @@ class facedePedidoAPIInterface(facedePedidoInterface, Protocol):
         """
         ...
 
-    def listar_todos(self, obra: str | None = None, status_atual: str | None = None,
-                     tamanho_pagina: int = 1000) -> list[Pedido]:
+    def listar_todos(
+        self,
+        obra: str | None = None,
+        status_atual: str | None = None,
+        tamanho_pagina: int = 1000,
+    ) -> list[Pedido]:
         """Todos os pedidos que casam com o filtro (percorre a paginação).
 
         Args:

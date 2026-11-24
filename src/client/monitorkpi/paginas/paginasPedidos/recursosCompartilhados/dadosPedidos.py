@@ -1,12 +1,13 @@
 """Acesso a dados compartilhado pelas páginas de pedidos: filtros, requisições à API e ordem dos status."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from bancoDadosSQL.entidades.pedidos import Pedido
-from monitorkpi.acessoServidor.interfaces.adapterAPIInterface import ApiError
-from monitorkpi.DIC import DIC  # DIC.facede_pedido() e DIC.facede_metricas()
+from client.monitorkpi.acessoServidor.interfaces.adapterAPIInterface import ApiError
+from client.monitorkpi.DIC import DIC  # DIC.facede_pedido() e DIC.facede_metricas()
 
 TODOS = "Todos"
 PERIODOS = {  # rótulo -> dias (None = sem limite)
@@ -16,7 +17,13 @@ PERIODOS = {  # rótulo -> dias (None = sem limite)
     "Últimos 90 dias": 90,
 }
 PERIODO_PADRAO = "Últimos 7 dias"  # filtro de período inicial: a semana
-ORDEM_STATUS = ["novo", "em cotação", "aprovado", "em entrega", "entregue"]  # ordem do processo
+ORDEM_STATUS = [
+    "novo",
+    "em cotação",
+    "aprovado",
+    "em entrega",
+    "entregue",
+]  # ordem do processo
 
 
 def chave_status(status: str) -> tuple[int, str]:
@@ -34,7 +41,11 @@ def chave_status(status: str) -> tuple[int, str]:
         return len(ORDEM_STATUS), status
 
 
-_CHAVES_OPCOES = {"obra": "obras", "status_atual": "status", "origem": "origens"}  # coluna -> chave da API
+_CHAVES_OPCOES = {
+    "obra": "obras",
+    "status_atual": "status",
+    "origem": "origens",
+}  # coluna -> chave da API
 _cache_opcoes: dict[str, list[str]] = {}
 
 
@@ -58,7 +69,9 @@ def valores_distintos(coluna: str) -> list[str]:
             return []  # servidor indisponível: o erro aparece ao atualizar os gráficos
         for col, chave in _CHAVES_OPCOES.items():
             lista = valores[chave]
-            _cache_opcoes[col] = sorted(lista, key=chave_status) if col == "status_atual" else lista
+            _cache_opcoes[col] = (
+                sorted(lista, key=chave_status) if col == "status_atual" else lista
+            )
     return _cache_opcoes[coluna]
 
 
@@ -97,12 +110,15 @@ def filtrar_pedidos(filtros: dict) -> list[Pedido]:
         ValueError: Se houver filtro de tarefa sem obra.
         ApiError: Se a consulta à API falhar.
     """
+
     def ativo(chave: str) -> str | None:
         """Valor do filtro `chave`, ou None se ausente, vazio ou igual a `TODOS`."""
         v = filtros.get(chave)
         return v if v and v != TODOS else None
 
-    pedidos = DIC.facede_pedido().listar_todos(obra=ativo("obra"), status_atual=ativo("status"))
+    pedidos = DIC.facede_pedido().listar_todos(
+        obra=ativo("obra"), status_atual=ativo("status")
+    )
     if origem := ativo("origem"):
         pedidos = [p for p in pedidos if p.origem == origem]
     if tarefa := ativo("tarefa"):
@@ -112,15 +128,21 @@ def filtrar_pedidos(filtros: dict) -> list[Pedido]:
     if de := filtros.get("de"):
         pedidos = [p for p in pedidos if p.data_criacao and p.data_criacao.date() >= de]
     if ate := filtros.get("ate"):
-        pedidos = [p for p in pedidos if p.data_criacao and p.data_criacao.date() <= ate]
+        pedidos = [
+            p for p in pedidos if p.data_criacao and p.data_criacao.date() <= ate
+        ]
     if dias := filtros.get("dias"):
         # data_criacao vem do servidor em UTC (CURRENT_TIMESTAMP do SQLite), sem fuso.
-        limite = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=int(dias))
+        limite = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+            days=int(dias)
+        )
         pedidos = [p for p in pedidos if p.data_criacao and p.data_criacao >= limite]
     return pedidos
 
 
-LIMITE_TOP_ITENS = 20  # o máximo que um gráfico de top itens pode pedir; ele corta no seu "Top N"
+LIMITE_TOP_ITENS = (
+    20  # o máximo que um gráfico de top itens pode pedir; ele corta no seu "Top N"
+)
 
 
 def top_itens(filtros: dict, limite: int = LIMITE_TOP_ITENS) -> list[tuple[str, int]]:
@@ -139,15 +161,22 @@ def top_itens(filtros: dict, limite: int = LIMITE_TOP_ITENS) -> list[tuple[str, 
     Raises:
         ApiError: Se a consulta à API falhar.
     """
+
     def ativo(chave: str) -> str | None:
         """Valor do filtro `chave`, ou None se ausente, vazio ou igual a `TODOS`."""
         v = filtros.get(chave)
         return v if v and v != TODOS else None
 
     return DIC.facede_metricas().top_itens(
-        obra=ativo("obra"), tarefa=ativo("tarefa"), status_atual=ativo("status"),
-        origem=ativo("origem"), dias=filtros.get("dias"), de=filtros.get("de"),
-        ate=filtros.get("ate"), limite=limite)
+        obra=ativo("obra"),
+        tarefa=ativo("tarefa"),
+        status_atual=ativo("status"),
+        origem=ativo("origem"),
+        dias=filtros.get("dias"),
+        de=filtros.get("de"),
+        ate=filtros.get("ate"),
+        limite=limite,
+    )
 
 
 @dataclass
@@ -160,7 +189,9 @@ class DadosPedidos:
     """
 
     pedidos: list[Pedido] = field(default_factory=list)
-    top_itens: list[tuple[str, int]] = field(default_factory=list)  # (produto, total), do maior
+    top_itens: list[tuple[str, int]] = field(
+        default_factory=list
+    )  # (produto, total), do maior
 
 
 def carregar_dados(filtros: dict, com_top_itens: bool = False) -> DadosPedidos:

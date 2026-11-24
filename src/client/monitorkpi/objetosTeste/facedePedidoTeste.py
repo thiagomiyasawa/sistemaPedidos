@@ -6,6 +6,7 @@ e acrescenta os extras que o `FacedePedidoAPI` oferece (`listar_todos`, `health`
 
     DIC.facede_pedido.override(providers.Singleton(FacedePedidoTeste))
 """
+
 from __future__ import annotations
 
 from typing import Self
@@ -14,7 +15,9 @@ from bancoDadosSQL.dbAdapterInterface import dbAdapterInterface
 from bancoDadosSQL.entidades.pedidos import Pedido
 from bancoDadosSQL.facedes.facedePedido import FacedePedido
 from bancoDadosSQL.SQLite.SQLiteAdapter import SQLiteAdapter
-from monitorkpi.acessoServidor.interfaces.facedePedidoAPIInterface import facedePedidoAPIInterface
+from client.monitorkpi.acessoServidor.interfaces.facedePedidoAPIInterface import (
+    facedePedidoAPIInterface,
+)
 
 
 class FacedePedidoTeste(FacedePedido, facedePedidoAPIInterface):
@@ -72,10 +75,17 @@ class FacedePedidoTeste(FacedePedido, facedePedidoAPIInterface):
             (mapa nome da tabela -> existe).
         """
         tabelas = {t: self.db.table_exists(t) for t in ("pedido", "item_pedido")}
-        return {"status": "ok" if all(tabelas.values()) else "degradado", "tabelas": tabelas}
+        return {
+            "status": "ok" if all(tabelas.values()) else "degradado",
+            "tabelas": tabelas,
+        }
 
-    def listar_todos(self, obra: str | None = None, status_atual: str | None = None,
-                     tamanho_pagina: int = 1000) -> list[Pedido]:
+    def listar_todos(
+        self,
+        obra: str | None = None,
+        status_atual: str | None = None,
+        tamanho_pagina: int = 1000,
+    ) -> list[Pedido]:
         """Todos os pedidos do filtro, percorrendo a paginação.
 
         Args:
@@ -88,7 +98,9 @@ class FacedePedidoTeste(FacedePedido, facedePedidoAPIInterface):
         """
         todos: list[Pedido] = []
         while True:
-            lote = self.listar(obra, status_atual, limit=tamanho_pagina, offset=len(todos))
+            lote = self.listar(
+                obra, status_atual, limit=tamanho_pagina, offset=len(todos)
+            )
             todos.extend(lote)
             if len(lote) < tamanho_pagina:
                 return todos

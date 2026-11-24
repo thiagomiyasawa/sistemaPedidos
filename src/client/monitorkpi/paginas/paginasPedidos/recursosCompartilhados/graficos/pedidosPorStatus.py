@@ -1,10 +1,16 @@
 """Gráfico: pedidos por status (barras)."""
+
 from __future__ import annotations
 
 from collections import Counter
 
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import CORES, CartaoGrafico
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import chave_status
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import (
+    CORES,
+    CartaoGrafico,
+)
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.dadosPedidos import (
+    chave_status,
+)
 
 
 class PedidosPorStatus(CartaoGrafico):
@@ -37,7 +43,9 @@ class PedidosPorStatus(CartaoGrafico):
             None. Desenha as barras, ou exibe a mensagem de vazio se não há pedidos.
         """
         contagem = Counter(p.status_atual for p in self.pedidos())
-        linhas = sorted(contagem.items(), key=lambda x: chave_status(x[0]))  # ordem do processo
+        linhas = sorted(
+            contagem.items(), key=lambda x: chave_status(x[0])
+        )  # ordem do processo
         self.mostrar(bool(linhas))
         if linhas:
             self.barras([s for s, _ in linhas], [n for _, n in linhas], cor=CORES[0])

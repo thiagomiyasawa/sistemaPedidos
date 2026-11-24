@@ -1,9 +1,13 @@
 """Gráfico: pedidos por obra (barras horizontais)."""
+
 from __future__ import annotations
 
 from collections import Counter
 
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import CORES, CartaoGrafico
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import (
+    CORES,
+    CartaoGrafico,
+)
 
 
 class PedidosPorObra(CartaoGrafico):
@@ -35,7 +39,14 @@ class PedidosPorObra(CartaoGrafico):
         Returns:
             None. Desenha as barras no gráfico, ou exibe a mensagem de vazio se não há pedidos.
         """
-        linhas = sorted(Counter(p.obra for p in self.pedidos()).items(), key=lambda x: x[1])
+        linhas = sorted(
+            Counter(p.obra for p in self.pedidos()).items(), key=lambda x: x[1]
+        )
         self.mostrar(bool(linhas))
         if linhas:
-            self.barras([o for o, _ in linhas], [n for _, n in linhas], horizontal=True, cor=CORES[2])
+            self.barras(
+                [o for o, _ in linhas],
+                [n for _, n in linhas],
+                horizontal=True,
+                cor=CORES[2],
+            )

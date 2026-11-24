@@ -1,4 +1,5 @@
 """Gráfico: evolução de pedidos criados ao longo do tempo (linha)."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -7,7 +8,10 @@ from PySide6.QtCharts import QCategoryAxis, QLineSeries, QScatterSeries, QValueA
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
-from monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import CORES, CartaoGrafico
+from client.monitorkpi.paginas.paginasPedidos.recursosCompartilhados.cartaoGrafico import (
+    CORES,
+    CartaoGrafico,
+)
 
 
 class EvolucaoPedidos(CartaoGrafico):
@@ -43,7 +47,9 @@ class EvolucaoPedidos(CartaoGrafico):
             None. Adiciona séries (linha e pontos) e eixos ao gráfico do cartão.
         """
         fmt = "%Y-%m-%d" if self.valor("agrupar") == "Dia" else "%Y-%m"
-        contagem = Counter(p.data_criacao.strftime(fmt) for p in self.pedidos() if p.data_criacao)
+        contagem = Counter(
+            p.data_criacao.strftime(fmt) for p in self.pedidos() if p.data_criacao
+        )
         linhas = sorted(contagem.items())
         self.mostrar(bool(linhas))
         if not linhas:
@@ -60,7 +66,9 @@ class EvolucaoPedidos(CartaoGrafico):
         # Eixo X numérico com rótulos sobre cada valor: funciona mesmo com um único ponto
         # (num QBarCategoryAxis o ponto único cairia na borda e a linha não apareceria).
         cat = QCategoryAxis()
-        cat.setLabelsPosition(QCategoryAxis.AxisLabelsPosition.AxisLabelsPositionOnValue)
+        cat.setLabelsPosition(
+            QCategoryAxis.AxisLabelsPosition.AxisLabelsPositionOnValue
+        )
         for i, rotulo in enumerate(rotulos):
             cat.append(rotulo, i)
         cat.setRange(-0.5, len(rotulos) - 0.5)
