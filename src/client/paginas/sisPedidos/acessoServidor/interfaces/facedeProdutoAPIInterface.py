@@ -10,11 +10,30 @@ from client.paginas.sisPedidos.entidades.produto import Produto
 class facedeProdutoAPIInterface(Protocol):
     """Leitura do catálogo de produtos, mais o ciclo de vida."""
 
-    def listar(self) -> list[Produto]:
-        """Lista os produtos do catálogo, ordenados por categoria e código.
+    def listar_pagina(self, busca: str | None = None, categoria: str | None = None,
+                      limit: int = 30, offset: int = 0) -> tuple[list[Produto], int]:
+        """Uma página do catálogo, já filtrada pelo servidor.
+
+        Args:
+            busca: texto procurado no código ou na descrição, se informado.
+            categoria: filtra por categoria exata, se informada.
+            limit: produtos por página.
+            offset: quantidade de produtos a pular.
 
         Returns:
-            list[Produto]: produtos do catálogo.
+            tuple[list[Produto], int]: produtos da página (por categoria e código) e o total que
+            casa com o filtro, somando todas as páginas.
+
+        Raises:
+            ApiError: em falha de comunicação com a API.
+        """
+        ...
+
+    def categorias(self) -> list[str]:
+        """Categorias distintas do catálogo, em ordem alfabética.
+
+        Returns:
+            list[str]: categorias.
 
         Raises:
             ApiError: em falha de comunicação com a API.

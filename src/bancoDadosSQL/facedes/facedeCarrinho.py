@@ -1,6 +1,7 @@
 """Facade do carrinho: itens que o usuário separou para o pedido (`carrinho_itens_cadastro`).
 
-Depende apenas de `dbAdapterInterface`.
+Uma linha é um produto numa data de necessidade e numa unidade (único por usuário + produto +
+data + unidade): o mesmo produto pode ter várias linhas, com datas ou unidades diferentes. Depende apenas de `dbAdapterInterface`.
 
 Uso:
     with DIC.db() as db:
@@ -9,10 +10,16 @@ Uso:
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import date
 from typing import Any
 
 from ..dbAdapterInterface import dbAdapterInterface
+from ..entidades.pedidos import ItemPedido, Pedido
 from .interfaces.facedeCarrinhoInterface import facedeCarrinhoInterface
+
+
+STATUS_INICIAL = "Aberto"  # status do pedido criado a partir do carrinho
+ORIGEM_PEDIDO = "Sistema de Pedidos"
 
 
 class FacedeCarrinho(facedeCarrinhoInterface):
@@ -37,55 +44,104 @@ class FacedeCarrinho(facedeCarrinhoInterface):
             user_id: dono do carrinho.
 
         Returns:
-            list[dict[str, Any]]: itens com `produto_id`, `codigo`, `descricao`, `categoria`
-            e `quantidade`.
+            list[dict[str, Any]]: itens com `id` (da linha), `produto_id`, `codigo`, `descricao`,
+            `categoria`, `quantidade`, `unidade` e `data_necessidade` (texto ISO).
         """
         linhas = self.db.fetch_all(
-            "SELECT c.produto_id, p.codigo, p.descricao, p.categoria, c.quantidade "
+            "SELECT c.id, c.produto_id, p.codigo, p.descricao, p.categoria, c.quantidade, "
+            "c.unidade, c.data_necessidade "
             "FROM carrinho_itens_cadastro c JOIN produtos p ON p.id = c.produto_id "
-            "WHERE c.user_id = ? ORDER BY c.rowid",
+            "WHERE c.user_id = ? ORDER BY c.id",
             (user_id,),
         )
         return [dict(linha) for linha in linhas]
 
-    def adicionar(self, user_id: int, produto_id: int, quantidade: int) -> bool:
-        """Soma `quantidade` ao produto no carrinho (cria o item se não existir).
+    def adicionar(self, user_id: int, produto_id: int, quantidade: int, unidade: str,
+                  data_necessidade: date) -> bool:
+        """Soma `quantidade` ao produto na data e unidade (cria a linha se não existir).
+
+        Mesmo produto com data ou unidade diferente vira outra linha.
 
         Args:
             user_id: dono do carrinho.
             produto_id: produto a adicionar.
             quantidade: quantidade a somar (positiva).
+            unidade: unidade de medida da quantidade.
+            data_necessidade: data em que o item é necessário.
 
         Returns:
             bool: True se adicionou; False se o produto não existir.
         """
+        data = data_necessidade.isoformat()
         cur = self.db.execute(
-            "INSERT INTO carrinho_itens_cadastro (user_id, produto_id, quantidade) "
-            "SELECT ?, id, ? FROM produtos WHERE id = ? "
-            "ON CONFLICT(user_id, produto_id) DO UPDATE SET quantidade = quantidade + excluded.quantidade",
-            (user_id, quantidade, produto_id),
+            "INSERT INTO carrinho_itens_cadastro (user_id, produto_id, quantidade, unidade, data_necessidade) "
+            "SELECT ?, id, ?, ?, ? FROM produtos WHERE id = ? "
+            "ON CONFLICT(user_id, produto_id, data_necessidade, unidade) "
+            "DO UPDATE SET quantidade = quantidade + excluded.quantidade",
+            (user_id, quantidade, unidade, data, produto_id),
         )
         return cur.rowcount > 0
 
-    def remover(self, user_id: int, produtos_ids: Iterable[int]) -> int:
-        """Remove produtos do carrinho (ids que não estão nele são ignorados).
+    def remover(self, user_id: int, itens_ids: Iterable[int]) -> int:
+        """Remove linhas do carrinho (ids que não são do usuário ou não existem são ignorados).
 
         Args:
             user_id: dono do carrinho.
-            produtos_ids: produtos a remover.
+            itens_ids: ids das linhas a remover.
 
         Returns:
-            int: quantos itens foram removidos.
+            int: quantas linhas foram removidas.
         """
-        ids = list(produtos_ids)
+        ids = list(itens_ids)
         if not ids:
             return 0
         marcas = ",".join("?" * len(ids))
         cur = self.db.execute(
-            f"DELETE FROM carrinho_itens_cadastro WHERE user_id = ? AND produto_id IN ({marcas})",
+            f"DELETE FROM carrinho_itens_cadastro WHERE user_id = ? AND id IN ({marcas})",
             (user_id, *ids),
         )
         return cur.rowcount
+
+    def finalizar(self, user_id: int, obra: str, tarefa: str, local_entrega: str) -> int:
+        """Cria o pedido do usuário com as linhas do carrinho e esvazia o carrinho.
+
+        Tudo em uma única transação: se algo falhar, o pedido não é criado e o carrinho fica
+        como estava.
+
+        Args:
+            user_id: dono do carrinho (e do pedido criado).
+            obra: obra do pedido.
+            tarefa: tarefa da obra.
+            local_entrega: local de entrega.
+
+        Returns:
+            int: número (id) do pedido criado.
+
+        Raises:
+            ValueError: se o carrinho estiver vazio ou os dados violarem as regras do pedido.
+        """
+        with self.db.transaction():
+            linhas = self.listar(user_id)
+            if not linhas:
+                raise ValueError("O carrinho está vazio")
+            itens = [
+                ItemPedido(
+                    produto=" - ".join(t for t in (l["codigo"], l["descricao"]) if t),
+                    quant=l["quantidade"],
+                    uni=l["unidade"],
+                    data_necessidade=l["data_necessidade"],
+                )
+                for l in linhas
+            ]
+            pedido = Pedido(
+                num_itens=len(itens), status_atual=STATUS_INICIAL, origem=ORIGEM_PEDIDO,
+                local_entrega=local_entrega, obra=obra, tarefa=tarefa, user_id=user_id, itens=itens)
+            pedido.id = self.db.insert("pedido", pedido.to_row())
+            for n, item in enumerate(itens, start=1):  # id do item = nº dentro do pedido
+                item.id, item.id_pedido = n, pedido.id
+                self.db.insert("item_pedido", item.to_row())
+            self.db.execute("DELETE FROM carrinho_itens_cadastro WHERE user_id = ?", (user_id,))
+        return pedido.id
 
     def limpar(self, user_id: int) -> None:
         """Esvazia o carrinho do usuário.

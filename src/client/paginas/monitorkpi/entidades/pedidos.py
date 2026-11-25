@@ -17,15 +17,17 @@ class ItemPedido:
     Atributos:
         produto: nome do produto (obrigatório, não vazio).
         quant: quantidade solicitada (deve ser > 0).
-        data_necessidade: data em que o item é necessário; aceita `date` ou
-            string ISO (convertida), ou None.
+        uni: unidade de medida da quantidade (obrigatória, não vazia).
+        data_necessidade: data em que o item é necessário (obrigatória); aceita `date` ou
+            string ISO (convertida).
         id_pedido: id do pedido ao qual pertence, ou None se ainda não vinculado.
         id: identificador do item no banco, ou None se ainda não persistido.
     """
 
     produto: str
     quant: int
-    data_necessidade: date | None = None
+    uni: str
+    data_necessidade: date
     id_pedido: int | None = None
     id: int | None = None
 
@@ -35,7 +37,7 @@ class ItemPedido:
         Converte `data_necessidade` de string ISO para `date`.
 
         Raises:
-            ValueError: se `produto` for vazio, `quant` <= 0 ou a data ISO for inválida.
+            ValueError: se `produto` ou `uni` for vazio, `quant` <= 0 ou a data faltar/for inválida.
         """
         if isinstance(self.data_necessidade, str):
             self.data_necessidade = date.fromisoformat(self.data_necessidade)
@@ -43,14 +45,18 @@ class ItemPedido:
             raise ValueError("produto é obrigatório")
         if self.quant <= 0:
             raise ValueError("quant deve ser > 0")
+        if not self.uni.strip():
+            raise ValueError("uni (unidade) é obrigatória")
+        if self.data_necessidade is None:
+            raise ValueError("data_necessidade é obrigatória")
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> Self:
         """Cria um item a partir de uma linha do banco.
 
         Args:
-            row: mapeamento com as chaves `id`, `id_pedido`, `produto`, `quant`
-                e `data_necessidade`.
+            row: mapeamento com as chaves `id`, `id_pedido`, `produto`, `quant`,
+                `uni` e `data_necessidade`.
 
         Returns:
             Nova instância de `ItemPedido`.
@@ -59,7 +65,7 @@ class ItemPedido:
             KeyError: se alguma chave obrigatória estiver ausente.
             ValueError: se os valores violarem as regras do item.
         """
-        return cls(**{k: row[k] for k in ("id", "id_pedido", "produto", "quant", "data_necessidade")})
+        return cls(**{k: row[k] for k in ("id", "id_pedido", "produto", "quant", "uni", "data_necessidade")})
 
     def to_row(self) -> dict[str, Any]:
         """Converte o item em dicionário para persistência.
@@ -69,7 +75,7 @@ class ItemPedido:
             string ISO (ou None).
         """
         d = asdict(self)
-        d["data_necessidade"] = self.data_necessidade.isoformat() if self.data_necessidade else None
+        d["data_necessidade"] = self.data_necessidade.isoformat()
         return d
 
 

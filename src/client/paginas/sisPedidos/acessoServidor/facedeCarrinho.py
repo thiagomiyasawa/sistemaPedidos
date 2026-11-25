@@ -5,12 +5,13 @@
 
 Uso:
     with FacedeCarrinhoAPI() as carrinho:
-        carrinho.adicionar(produto_id=7, quant=3)
+        carrinho.adicionar(7, 3, "m", date(2027, 3, 15))
         itens = carrinho.listar()
 """
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import date
 from typing import Any, Self
 
 from client.adapters.adapterAPI import AdapterAPI
@@ -40,6 +41,9 @@ def _para_itens(dados: list[dict[str, Any]]) -> list[ItemCarrinho]:
                 categoria=d.get("categoria") or "",
             ),
             quant=d["quantidade"],
+            uni=d["unidade"],
+            data_necessidade=date.fromisoformat(d["data_necessidade"]),
+            id=d["id"],
         )
         for d in dados
     ]
@@ -102,12 +106,17 @@ class FacedeCarrinhoAPI(facedeCarrinhoAPIInterface):
         """
         return _para_itens(self.api.get("/carrinho"))
 
-    def adicionar(self, produto_id: int, quant: int) -> list[ItemCarrinho]:
-        """Soma `quant` ao produto no carrinho (`POST /carrinho/itens`).
+    def adicionar(self, produto_id: int, quant: int, uni: str,
+                  data_necessidade: date) -> list[ItemCarrinho]:
+        """Soma `quant` ao produto na data e unidade (`POST /carrinho/itens`).
+
+        O mesmo produto pode ter várias linhas, com datas ou unidades diferentes.
 
         Args:
             produto_id: produto a adicionar.
             quant: quantidade a somar (positiva).
+            uni: unidade de medida da quantidade.
+            data_necessidade: data em que o item é necessário.
 
         Returns:
             list[ItemCarrinho]: carrinho após a inclusão.
@@ -116,15 +125,18 @@ class FacedeCarrinhoAPI(facedeCarrinhoAPIInterface):
             ApiError: em falha de comunicação ou se a API recusar (ex.: produto inexistente).
         """
         return _para_itens(
-            self.api.post("/carrinho/itens", json={"produto_id": produto_id, "quantidade": quant}))
+            self.api.post("/carrinho/itens", json={
+                "produto_id": produto_id, "quantidade": quant, "unidade": uni,
+                "data_necessidade": data_necessidade.isoformat(),
+            }))
 
-    def remover(self, produtos_ids: Iterable[int]) -> None:
-        """Remove produtos do carrinho (`DELETE /carrinho/itens/{id}`), um a um.
+    def remover(self, itens_ids: Iterable[int]) -> None:
+        """Remove linhas do carrinho (`DELETE /carrinho/itens/{id}`), uma a uma.
 
-        Produto que já não está no carrinho (404) é ignorado.
+        Linha que já não existe (404) é ignorada.
 
         Args:
-            produtos_ids: produtos a remover.
+            itens_ids: ids das linhas (`ItemCarrinho.id`) a remover.
 
         Returns:
             None.
@@ -132,12 +144,34 @@ class FacedeCarrinhoAPI(facedeCarrinhoAPIInterface):
         Raises:
             ApiError: em falha de comunicação ou erro da API diferente de 404.
         """
-        for produto_id in produtos_ids:
+        for item_id in itens_ids:
             try:
-                self.api.delete(f"/carrinho/itens/{produto_id}")
+                self.api.delete(f"/carrinho/itens/{item_id}")
             except ApiError as e:
                 if e.status_code != 404:
                     raise
+
+    def finalizar(self, obra: str, tarefa: str, local_entrega: str) -> int:
+        """Fecha o carrinho (`POST /carrinho/finalizar`): o servidor monta o pedido e o esvazia.
+
+        O cliente só envia os dados do pedido que o carrinho não tem; as linhas do carrinho já
+        estão no servidor.
+
+        Args:
+            obra: obra do pedido.
+            tarefa: tarefa da obra.
+            local_entrega: local de entrega.
+
+        Returns:
+            int: número (id) do pedido criado.
+
+        Raises:
+            ApiError: em falha de comunicação ou se a API recusar (ex.: carrinho vazio, sem
+                permissão de criar pedidos).
+        """
+        pedido = self.api.post("/carrinho/finalizar", json={
+            "obra": obra, "tarefa": tarefa, "local_entrega": local_entrega})
+        return pedido["id"]
 
     def limpar(self) -> None:
         """Esvazia o carrinho (`DELETE /carrinho`).

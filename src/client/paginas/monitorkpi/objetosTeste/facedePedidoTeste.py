@@ -80,6 +80,29 @@ class FacedePedidoTeste(FacedePedido, facedePedidoAPIInterface):
             "tabelas": tabelas,
         }
 
+    def listar_meus_pagina(self, status_atual: str | None = None, limit: int = 30,
+                           offset: int = 0) -> tuple[list[Pedido], int]:
+        """Sem usuário autenticado neste facade de teste, considera todos os pedidos.
+
+        Args:
+            status_atual: filtra por status, ou None.
+            limit: pedidos por página.
+            offset: quantidade de pedidos a pular.
+
+        Returns:
+            tuple[list[Pedido], int]: pedidos da página (do mais novo) e o total do filtro.
+        """
+        return (self.listar(None, status_atual, limit, offset, None, "desc"),
+                self.contar(None, status_atual, None))
+
+    def status_dos_meus(self) -> list[str]:
+        """Sem usuário autenticado neste facade de teste, status de todos os pedidos.
+
+        Returns:
+            list[str]: status existentes.
+        """
+        return self.status_distintos(None)
+
     def listar_todos(
         self,
         obra: str | None = None,

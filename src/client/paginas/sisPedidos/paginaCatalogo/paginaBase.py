@@ -1,10 +1,13 @@
 """Página de catálogo: consulta de produtos e adição de itens ao carrinho (PySide6).
 
-Lista de produtos com busca por texto e filtro de categoria; cada linha tem quantidade e botão
-"Adicionar". Os itens vão para o carrinho compartilhado (`DIC.carrinho()`), exibido na página
-do carrinho (`sisPedidos/paginaCarrinho`).
-O catálogo vem da API (`GET /produtos`) pelo facade de produtos. Se a API falhar, a página
-mostra a mensagem de erro no lugar da lista.
+Lista de produtos com busca por texto e filtro de categoria; o botão "Adicionar" de cada linha
+abre um popup para informar quantidade, unidade e data de necessidade. Os itens vão para o
+carrinho compartilhado (`DIC.carrinho()`), exibido na página do carrinho
+(`sisPedidos/paginaCarrinho`).
+
+A paginação é feita no servidor: a tela pede à API (`GET /produtos`) só os 30 produtos da página
+atual, já filtrados por busca e categoria, e recebe o total para montar a barra de páginas. Se a
+API falhar, a página mostra a mensagem de erro e mantém a lista anterior.
 
 Execução:
     .venv/Scripts/python.exe "src/client/paginas/sisPedidos/paginaCatalogo/paginaBase.py"
@@ -19,7 +22,7 @@ _SRC = Path(__file__).resolve().parents[3]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from PySide6.QtCore import Qt, Signal  # noqa: E402
+from PySide6.QtCore import Qt, QTimer, Signal  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QAbstractItemView,
     QApplication,
@@ -30,7 +33,6 @@ from PySide6.QtWidgets import (  # noqa: E402
     QLineEdit,
     QMainWindow,
     QPushButton,
-    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -38,14 +40,19 @@ from PySide6.QtWidgets import (  # noqa: E402
 )
 
 from client.adapters.interfaces.adapterAPIInterface import ApiError  # noqa: E402
+from client.componentes.barraPaginacao import BarraPaginacao  # noqa: E402
 from client.DIC import DIC  # noqa: E402
 from client.paginas.sisPedidos.acessoServidor.interfaces.facedeProdutoAPIInterface import (  # noqa: E402
     facedeProdutoAPIInterface,
 )
 from client.paginas.sisPedidos.carrinho import Carrinho  # noqa: E402
 from client.paginas.sisPedidos.entidades.produto import Produto  # noqa: E402
+from client.paginas.sisPedidos.paginaCatalogo.dialogoAdicionarItem import (  # noqa: E402
+    DialogoAdicionarItem,
+)
 
 TODAS = "Todas"
+ATRASO_BUSCA_MS = 300  # espera o usuário parar de digitar antes de consultar a API
 
 ESTILO = """
 QWidget { font-size: 10pt; }
@@ -56,64 +63,63 @@ QWidget { font-size: 10pt; }
 """
 
 
-def carregar_catalogo(facede: facedeProdutoAPIInterface | None = None) -> list[Produto]:
-    """Obtém os produtos do catálogo pela API (facade de produtos).
-
-    Args:
-        facede: facade de produtos; se None usa `DIC.facede_produto()`.
-
-    Returns:
-        Lista de `Produto`.
-
-    Raises:
-        ApiError: em falha de comunicação com a API.
-    """
-    return (facede or DIC.facede_produto()).listar()
-
-
 class PainelCatalogo(QWidget):
-    """Lista de produtos com busca, filtro de categoria e botão de adicionar.
+    """Busca, filtro de categoria, tabela da página atual, barra de páginas e botão de adicionar.
+
+    O painel não conhece a API: quando busca, categoria ou página mudam ele emite `consultar`, e
+    quem o hospeda lê `estado()`, consulta e devolve o resultado em `definir_pagina`.
 
     Signals:
-        adicionar(Produto, int): emitido ao adicionar um produto com a quantidade escolhida.
+        adicionar(Produto, int, str, date): emitido ao adicionar um produto com a
+            quantidade, a unidade e a data de necessidade escolhidas.
+        consultar(): emitido quando é preciso buscar de novo a página (filtro ou página mudou).
+
+    Attributes:
+        visiveis: Produtos da página atual.
+        paginacao: Barra de páginas (alimentada com o total devolvido pela API).
     """
 
-    adicionar = Signal(object, int)
+    adicionar = Signal(object, int, str, object)
+    consultar = Signal()
 
-    def __init__(self, produtos: list[Produto]) -> None:
-        """Monta filtros e tabela.
-
-        Args:
-            produtos: Produtos do catálogo.
-        """
+    def __init__(self) -> None:
+        """Monta filtros, tabela e barra de páginas (vazios até `definir_pagina`)."""
         super().__init__()
-        self.produtos = produtos
         self.visiveis: list[Produto] = []
 
         self.busca = QLineEdit()
         self.busca.setPlaceholderText("Buscar por código ou descrição...")
         self.busca.setClearButtonEnabled(True)
-        self.busca.textChanged.connect(self.atualizar)
+        self._timer_busca = QTimer(self)
+        self._timer_busca.setSingleShot(True)
+        self._timer_busca.setInterval(ATRASO_BUSCA_MS)
+        self._timer_busca.timeout.connect(self._filtro_mudou)
+        self.busca.textChanged.connect(lambda _t: self._timer_busca.start())
+        self.busca.returnPressed.connect(self._busca_agora)
 
         self.categoria = QComboBox()
-        self.categoria.currentIndexChanged.connect(self.atualizar)
+        self.categoria.addItem(TODAS)
+        self.categoria.currentIndexChanged.connect(self._filtro_mudou)
 
         filtros = QHBoxLayout()
         filtros.addWidget(self._com_rotulo("Busca", self.busca), 1)
         filtros.addWidget(self._com_rotulo("Categoria", self.categoria))
 
-        self.tabela = QTableWidget(0, 5)
-        self.tabela.setHorizontalHeaderLabels(["Código", "Descrição", "Categoria", "Qtd.", ""])
+        self.tabela = QTableWidget(0, 4)
+        self.tabela.setHorizontalHeaderLabels(["Código", "Descrição", "Categoria", ""])
         self.tabela.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabela.setSelectionMode(QAbstractItemView.NoSelection)
         self.tabela.verticalHeader().setVisible(False)
         cab = self.tabela.horizontalHeader()
+        cab.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # igual ao conteúdo das células
         cab.setSectionResizeMode(1, QHeaderView.Stretch)
-        for col in (0, 2, 3, 4):
+        for col in (0, 2, 3):
             cab.setSectionResizeMode(col, QHeaderView.ResizeToContents)
 
         self.contagem = QLabel()
         self.contagem.setObjectName("vazio")
+        self.paginacao = BarraPaginacao()  # só aparece com mais de 30 produtos
+        self.paginacao.mudou.connect(self.consultar)
 
         titulo = QLabel("Catálogo")
         titulo.setObjectName("subtitulo")
@@ -121,25 +127,8 @@ class PainelCatalogo(QWidget):
         lay.addWidget(titulo)
         lay.addLayout(filtros)
         lay.addWidget(self.tabela, 1)
+        lay.addWidget(self.paginacao)
         lay.addWidget(self.contagem)
-
-        self.definir_produtos(produtos)
-
-    def definir_produtos(self, produtos: list[Produto]) -> None:
-        """Troca o catálogo exibido, mantendo a categoria escolhida se ainda existir.
-
-        Args:
-            produtos: Novos produtos do catálogo.
-        """
-        self.produtos = produtos
-        escolhida = self.categoria.currentText()
-        self.categoria.blockSignals(True)
-        self.categoria.clear()
-        self.categoria.addItems([TODAS, *sorted({p.categoria for p in produtos if p.categoria})])
-        if (i := self.categoria.findText(escolhida)) >= 0:
-            self.categoria.setCurrentIndex(i)
-        self.categoria.blockSignals(False)
-        self.atualizar()
 
     @staticmethod
     def _com_rotulo(rotulo: str, w: QWidget) -> QWidget:
@@ -162,36 +151,71 @@ class PainelCatalogo(QWidget):
         box.addWidget(w)
         return caixa
 
-    def atualizar(self) -> None:
-        """Refiltra os produtos pela busca e categoria e redesenha a tabela."""
-        texto = self.busca.text().strip().casefold()
-        cat = self.categoria.currentText()
-        self.visiveis = [
-            p for p in self.produtos
-            if (cat == TODAS or p.categoria == cat)
-            and (not texto or texto in p.codigo.casefold() or texto in p.descricao.casefold())
-        ]
-        self.tabela.setRowCount(len(self.visiveis))
-        for linha, p in enumerate(self.visiveis):
+    def _busca_agora(self) -> None:
+        """Enter no campo de busca: consulta já, sem esperar o atraso."""
+        self._timer_busca.stop()
+        self._filtro_mudou()
+
+    def _filtro_mudou(self) -> None:
+        """Busca ou categoria mudaram: volta à primeira página e pede nova consulta."""
+        self._timer_busca.stop()
+        self.paginacao.voltar_ao_inicio()
+        self.consultar.emit()
+
+    def estado(self) -> tuple[str | None, str | None, int, int]:
+        """Parâmetros da consulta atual.
+
+        Returns:
+            tuple: `(busca, categoria, limit, offset)`; busca e categoria são None quando vazias
+            ou "Todas".
+        """
+        busca = self.busca.text().strip() or None
+        categoria = self.categoria.currentText()
+        return (busca, None if categoria in ("", TODAS) else categoria,
+                self.paginacao.tamanho, self.paginacao.inicio)
+
+    def definir_categorias(self, categorias: list[str]) -> None:
+        """Atualiza a lista do filtro de categoria, mantendo a escolhida se ainda existir.
+
+        Args:
+            categorias: categorias vindas da API.
+        """
+        escolhida = self.categoria.currentText()
+        self.categoria.blockSignals(True)
+        self.categoria.clear()
+        self.categoria.addItems([TODAS, *categorias])
+        if (i := self.categoria.findText(escolhida)) >= 0:
+            self.categoria.setCurrentIndex(i)
+        self.categoria.blockSignals(False)
+
+    def definir_pagina(self, produtos: list[Produto], total: int) -> None:
+        """Mostra os produtos da página devolvida pela API.
+
+        Args:
+            produtos: produtos da página atual.
+            total: quantos produtos casam com o filtro, somando todas as páginas.
+        """
+        self.visiveis = produtos
+        self.paginacao.definir_total(total)
+        self.tabela.setRowCount(len(produtos))
+        for linha, p in enumerate(produtos):
             for col, valor in enumerate((p.codigo, p.descricao, p.categoria)):
                 self.tabela.setItem(linha, col, QTableWidgetItem(valor))
-            spin = QSpinBox()
-            spin.setRange(1, 99999)
             btn = QPushButton("Adicionar")
-            btn.clicked.connect(lambda _=False, prod=p, s=spin: self._adicionar(prod, s))
-            self.tabela.setCellWidget(linha, 3, spin)
-            self.tabela.setCellWidget(linha, 4, btn)
-        self.contagem.setText(f"{len(self.visiveis)} de {len(self.produtos)} produtos")
+            btn.clicked.connect(lambda _=False, prod=p: self._adicionar(prod))
+            self.tabela.setCellWidget(linha, 3, btn)
+        self.contagem.setText(f"{total} produto(s)")
 
-    def _adicionar(self, produto: Produto, spin: QSpinBox) -> None:
-        """Emite `adicionar` e volta a quantidade para 1.
+    def _adicionar(self, produto: Produto) -> None:
+        """Abre o popup de detalhes e, se confirmado, emite `adicionar`.
 
         Args:
             produto: Produto escolhido.
-            spin: Campo de quantidade da linha.
         """
-        self.adicionar.emit(produto, spin.value())
-        spin.setValue(1)
+        dialogo = DialogoAdicionarItem(produto, self)
+        if dialogo.exec() == DialogoAdicionarItem.Accepted and dialogo.unidade():
+            self.adicionar.emit(
+                produto, dialogo.quantidade(), dialogo.unidade(), dialogo.data_necessidade())
 
 
 class PaginaCatalogo(QWidget):
@@ -206,13 +230,11 @@ class PaginaCatalogo(QWidget):
 
     TITULO = "Catálogo de Produtos"
 
-    def __init__(self, produtos: list[Produto] | None = None,
-                 facede: facedeProdutoAPIInterface | None = None,
+    def __init__(self, facede: facedeProdutoAPIInterface | None = None,
                  carrinho: Carrinho | None = None) -> None:
-        """Monta cabeçalho e o painel do catálogo e carrega os produtos.
+        """Monta cabeçalho e o painel do catálogo e carrega a primeira página.
 
         Args:
-            produtos: Catálogo a exibir; se None, é obtido da API por `recarregar()`.
             facede: facade de produtos; se None usa `DIC.facede_produto()`.
             carrinho: carrinho que recebe os itens; se None usa `DIC.carrinho()`.
         """
@@ -220,8 +242,9 @@ class PaginaCatalogo(QWidget):
         self.setStyleSheet(ESTILO)
         self._facede = facede
         self.carrinho = carrinho or DIC.carrinho()
-        self.catalogo = PainelCatalogo(produtos or [])
+        self.catalogo = PainelCatalogo()
         self.catalogo.adicionar.connect(self.carrinho.adicionar)
+        self.catalogo.consultar.connect(self.carregar_pagina)
         self.rotulo_carrinho = QLabel()
         self.rotulo_carrinho.setObjectName("vazio")
         self.carrinho.alterado.connect(self._atualizar_resumo_carrinho)
@@ -246,9 +269,16 @@ class PaginaCatalogo(QWidget):
         lay.addWidget(self.rotulo_erro)
         lay.addWidget(self.catalogo, 1)
         lay.addWidget(self.rotulo_carrinho)
-        if produtos is None:
-            self.recarregar()
+        self.recarregar()
         self.carrinho.recarregar()  # traz o carrinho do usuário guardado no banco
+
+    def _fac(self) -> facedeProdutoAPIInterface:
+        """Facade de produtos em uso.
+
+        Returns:
+            facedeProdutoAPIInterface: o injetado ou `DIC.facede_produto()`.
+        """
+        return self._facede or DIC.facede_produto()
 
     def _erro_carrinho(self, mensagem: str) -> None:
         """Mostra, no resumo do carrinho, a falha ao acessá-lo na API.
@@ -266,19 +296,50 @@ class PaginaCatalogo(QWidget):
         self.rotulo_carrinho.setText(f"{n} item(ns) no carrinho" if n else "Carrinho vazio")
 
     def recarregar(self) -> None:
-        """Busca o catálogo na API e atualiza a lista; em falha mostra o erro e mantém a lista.
+        """Atualiza as categorias do filtro e a página atual a partir da API.
+
+        Em falha mostra o erro e mantém o que estava na tela.
 
         Returns:
             None.
         """
         try:
-            produtos = carregar_catalogo(self._facede)
+            self.catalogo.definir_categorias(self._fac().categorias())
         except ApiError as e:
-            self.rotulo_erro.setText(f"Não foi possível carregar o catálogo: {e.detalhe or e}")
-            self.rotulo_erro.show()
+            self._mostrar_erro(e)
             return
+        self.carregar_pagina()
+
+    def carregar_pagina(self) -> None:
+        """Pede à API a página atual (com a busca e a categoria escolhidas) e a exibe.
+
+        Se a página pedida ficou além do fim (itens saíram do catálogo), volta para a última.
+
+        Returns:
+            None. Em falha mostra o erro e mantém a lista anterior.
+        """
+        for _tentativa in range(2):
+            busca, categoria, limit, offset = self.catalogo.estado()
+            try:
+                produtos, total = self._fac().listar_pagina(busca, categoria, limit, offset)
+            except ApiError as e:
+                self._mostrar_erro(e)
+                return
+            paginacao = self.catalogo.paginacao
+            if produtos or total == 0 or offset == 0:
+                break
+            paginacao.definir_total(total)  # ajusta a página para a última existente
         self.rotulo_erro.hide()
-        self.catalogo.definir_produtos(produtos)
+        self.catalogo.definir_pagina(produtos, total)
+
+    def _mostrar_erro(self, e: ApiError) -> None:
+        """Exibe a falha ao carregar o catálogo.
+
+        Args:
+            e: erro da API.
+        """
+        self.rotulo_erro.setText(f"Não foi possível carregar o catálogo: {e.detalhe or e}")
+        self.rotulo_erro.show()
 
 
 class JanelaPrincipal(QMainWindow):

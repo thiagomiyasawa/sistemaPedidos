@@ -137,6 +137,7 @@ class FacedePedidoAPI(facedePedidoAPIInterface):
         status_atual: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        apenas_meus: bool = False,
     ) -> list[Pedido]:
         """Lista pedidos de forma paginada.
 
@@ -145,6 +146,7 @@ class FacedePedidoAPI(facedePedidoAPIInterface):
             status_atual: filtra por status, ou None.
             limit: tamanho máximo da página.
             offset: quantidade de registros a pular.
+            apenas_meus: se True, só os pedidos do usuário autenticado.
 
         Returns:
             Lista de `Pedido` da página solicitada.
@@ -154,7 +156,8 @@ class FacedePedidoAPI(facedePedidoAPIInterface):
             ApiError: em falha de comunicação com a API.
         """
         filtro = ListarPedidosEntrada(
-            obra=obra, status_atual=status_atual, limit=limit, offset=offset
+            obra=obra, status_atual=status_atual, limit=limit, offset=offset,
+            apenas_meus=apenas_meus,
         )
         return listarPedidos.para_entidades(self.api.get("/pedidos", **filtro.params()))
 
@@ -185,6 +188,38 @@ class FacedePedidoAPI(facedePedidoAPIInterface):
             todos.extend(lote)
             if len(lote) < tamanho_pagina:
                 return todos
+
+    def listar_meus_pagina(self, status_atual: str | None = None, limit: int = 30,
+                           offset: int = 0) -> tuple[list[Pedido], int]:
+        """Uma página dos pedidos do usuário autenticado, do mais novo para o mais antigo.
+
+        Args:
+            status_atual: filtra por status, ou None.
+            limit: pedidos por página.
+            offset: quantidade de pedidos a pular.
+
+        Returns:
+            tuple[list[Pedido], int]: pedidos da página (sem itens) e o total que casa com o
+            filtro, somando todas as páginas.
+
+        Raises:
+            ApiError: em falha de comunicação com a API.
+        """
+        filtro = ListarPedidosEntrada(
+            status_atual=status_atual, limit=limit, offset=offset, ordem="desc", apenas_meus=True)
+        dados, total = self.api.get_pagina("/pedidos", **filtro.params())
+        return listarPedidos.para_entidades(dados), total
+
+    def status_dos_meus(self) -> list[str]:
+        """Status distintos dos pedidos do usuário (`GET /pedidos/status`).
+
+        Returns:
+            list[str]: status em ordem alfabética.
+
+        Raises:
+            ApiError: em falha de comunicação com a API.
+        """
+        return self.api.get("/pedidos/status", apenas_meus=True)
 
     def itens_do_pedido(self, pedido_id: int) -> list[ItemPedido]:
         """Lista os itens de um pedido.

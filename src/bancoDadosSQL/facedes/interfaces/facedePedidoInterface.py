@@ -34,6 +34,7 @@ class facedePedidoInterface(Protocol):
         limit: int = 100,
         offset: int = 0,
         user_id: int | None = None,
+        ordem: str = "asc",
     ) -> list[Pedido]:
         """Lista pedidos, com filtros opcionais e paginação.
 
@@ -43,9 +44,35 @@ class facedePedidoInterface(Protocol):
             limit: máximo de pedidos retornados.
             offset: quantidade de pedidos a pular.
             user_id: se informado, só pedidos desse dono.
+            ordem: "asc" (por id crescente) ou "desc" (do mais novo para o mais antigo).
 
         Returns:
             list[Pedido]: pedidos encontrados.
+        """
+        ...
+
+    def contar(self, obra: str | None = None, status_atual: str | None = None,
+               user_id: int | None = None) -> int:
+        """Quantos pedidos casam com o filtro (para calcular o número de páginas).
+
+        Args:
+            obra: filtra por obra, se informada.
+            status_atual: filtra por status, se informado.
+            user_id: se informado, só pedidos desse dono.
+
+        Returns:
+            int: total de pedidos que casam com o filtro.
+        """
+        ...
+
+    def status_distintos(self, user_id: int | None = None) -> list[str]:
+        """Status distintos dos pedidos, em ordem alfabética.
+
+        Args:
+            user_id: se informado, só considera pedidos desse dono.
+
+        Returns:
+            list[str]: status existentes.
         """
         ...
 

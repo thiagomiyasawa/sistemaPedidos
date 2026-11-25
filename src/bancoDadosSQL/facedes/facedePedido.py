@@ -49,8 +49,28 @@ class FacedePedido(facedePedidoInterface):
             pedido.itens = self.itens_do_pedido(pedido_id)
         return pedido
 
+    @staticmethod
+    def _filtro(obra: str | None, status_atual: str | None, user_id: int | None) -> tuple[str, list]:
+        """Cláusula WHERE comum a `listar` e `contar`, e seus parâmetros.
+
+        Args:
+            obra: filtra por obra, se informada.
+            status_atual: filtra por status, se informado.
+            user_id: se informado, só pedidos desse dono.
+
+        Returns:
+            tuple[str, list]: cláusula WHERE (vazia se sem filtros) e lista de parâmetros.
+        """
+        filtros, params = [], []
+        for col, val in (("obra", obra), ("status_atual", status_atual), ("user_id", user_id)):
+            if val is not None and val != "":
+                filtros.append(f"{col} = ?")
+                params.append(val)
+        return (f"WHERE {' AND '.join(filtros)}" if filtros else ""), params
+
     def listar(self, obra: str | None = None, status_atual: str | None = None,
-               limit: int = 100, offset: int = 0, user_id: int | None = None) -> list[Pedido]:
+               limit: int = 100, offset: int = 0, user_id: int | None = None,
+               ordem: str = "asc") -> list[Pedido]:
         """Lista pedidos (sem itens) ordenados por ID, com filtros e paginação.
 
         Args:
@@ -59,21 +79,45 @@ class FacedePedido(facedePedidoInterface):
             limit: máximo de pedidos retornados.
             offset: quantidade de pedidos a pular.
             user_id: se informado, só pedidos desse dono.
+            ordem: "asc" (por id crescente) ou "desc" (do mais novo para o mais antigo).
 
         Returns:
             list[Pedido]: pedidos encontrados (lista vazia se nenhum).
         """
-        filtros, params = [], []
-        for col, val in (("obra", obra), ("status_atual", status_atual),
-                         ("user_id", user_id)):
-            if val is not None and val != "":
-                filtros.append(f"{col} = ?")
-                params.append(val)
-        where = f"WHERE {' AND '.join(filtros)}" if filtros else ""
+        where, params = self._filtro(obra, status_atual, user_id)
+        direcao = "DESC" if ordem == "desc" else "ASC"
         rows = self.db.fetch_all(
-            f"SELECT * FROM pedido {where} ORDER BY id LIMIT ? OFFSET ?",
+            f"SELECT * FROM pedido {where} ORDER BY id {direcao} LIMIT ? OFFSET ?",
             [*params, limit, offset])
         return [Pedido.from_row(r) for r in rows]
+
+    def contar(self, obra: str | None = None, status_atual: str | None = None,
+               user_id: int | None = None) -> int:
+        """Quantos pedidos casam com o filtro (para calcular o número de páginas).
+
+        Args:
+            obra: filtra por obra, se informada.
+            status_atual: filtra por status, se informado.
+            user_id: se informado, só pedidos desse dono.
+
+        Returns:
+            int: total de pedidos que casam com o filtro.
+        """
+        where, params = self._filtro(obra, status_atual, user_id)
+        return self.db.fetch_one(f"SELECT COUNT(*) AS n FROM pedido {where}", params)["n"]
+
+    def status_distintos(self, user_id: int | None = None) -> list[str]:
+        """Status distintos dos pedidos, em ordem alfabética.
+
+        Args:
+            user_id: se informado, só considera pedidos desse dono.
+
+        Returns:
+            list[str]: status existentes.
+        """
+        where, params = self._filtro(None, None, user_id)
+        rows = self.db.fetch_all(f"SELECT DISTINCT status_atual FROM pedido {where} ORDER BY status_atual", params)
+        return [r["status_atual"] for r in rows]
 
     def itens_do_pedido(self, pedido_id: int) -> list[ItemPedido]:
         """Devolve os itens de um pedido.

@@ -82,7 +82,8 @@ CREATE TABLE item_pedido(
     id_pedido INTEGER NOT NULL,
     produto TEXT NOT NULL,
     quant INTEGER NOT NULL,
-    data_necessidade DATE,
+    uni TEXT NOT NULL,            -- unidade de medida (un, m, kg...)
+    data_necessidade DATE NOT NULL,
     PRIMARY KEY (id_pedido, id),
     CONSTRAINT fk_id_pedido FOREIGN KEY (id_pedido) REFERENCES pedido(id)
 );
@@ -93,11 +94,13 @@ CREATE TABLE produtos(
     categoria TEXT
 );
 CREATE TABLE carrinho_itens_cadastro(
-    user_id INTEGER,
-    produto_id INTEGER,
-    quantidade INTEGER,
-    unidade TEXT,
-    data_necessidade DATE,
-    PRIMARY KEY(user_id,produto_id)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,   -- identifica a linha (para remover)
+    user_id INTEGER NOT NULL,
+    produto_id INTEGER NOT NULL,
+    quantidade INTEGER NOT NULL,
+    unidade TEXT NOT NULL,
+    data_necessidade DATE NOT NULL,
+    -- o mesmo produto pode repetir, desde que em data de necessidade ou unidade diferentes
+    UNIQUE (user_id, produto_id, data_necessidade, unidade),
     CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES usuario(id)
 );

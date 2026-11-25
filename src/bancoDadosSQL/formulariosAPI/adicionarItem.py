@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from ..entidades.pedidos import ItemPedido, Pedido
 from .saidaPedido import PedidoSaida
 from .validacoes import (MAX_ITENS_POR_PEDIDO, ConflitoIntegridade, DataNecessidade,
-                         Produto, Quantidade)
+                         Produto, Quantidade, Unidade)
 
 
 class AdicionarItemEntrada(BaseModel):
@@ -15,7 +15,8 @@ class AdicionarItemEntrada(BaseModel):
     Campos:
         produto: Nome do produto (texto validado, sem caracteres de controle).
         quant: Quantidade solicitada (inteiro positivo, até o limite permitido).
-        data_necessidade: Data em que o item é necessário (opcional; deve ser plausível).
+        uni: Unidade de medida da quantidade (obrigatória; texto validado).
+        data_necessidade: Data em que o item é necessário (obrigatória; deve ser plausível).
 
     Campos extras são rejeitados (`extra="forbid"`).
     """
@@ -24,15 +25,16 @@ class AdicionarItemEntrada(BaseModel):
 
     produto: Produto
     quant: Quantidade
-    data_necessidade: DataNecessidade | None = None
+    uni: Unidade
+    data_necessidade: DataNecessidade
 
     def chave(self) -> tuple[str, object]:
-        """Identifica o item dentro de um pedido (produto + data, sem diferenciar maiúsculas).
+        """Identifica o item dentro de um pedido (produto + data + unidade; o produto sem diferenciar maiúsculas).
 
         Returns:
-            Tupla (produto em casefold, data_necessidade) usada para detectar duplicados.
+            Tupla (produto em casefold, data_necessidade, uni) usada para detectar duplicados.
         """
-        return (self.produto.casefold(), self.data_necessidade)
+        return (self.produto.casefold(), self.data_necessidade, self.uni)
 
     # --- verificações contra o pedido já gravado (chamar logo após receber) ---
     def verificar_limite_itens(self, pedido: Pedido) -> None:
@@ -49,18 +51,18 @@ class AdicionarItemEntrada(BaseModel):
                 f"Pedido já tem o máximo de {MAX_ITENS_POR_PEDIDO} itens")
 
     def verificar_item_duplicado(self, pedido: Pedido) -> None:
-        """Não pode existir item com o mesmo produto e data de necessidade.
+        """Não pode existir item com o mesmo produto, data de necessidade e unidade.
 
         Args:
             pedido: Pedido já gravado, com seus itens atuais.
 
         Raises:
-            ConflitoIntegridade: Se já existe item com a mesma chave (produto + data).
+            ConflitoIntegridade: Se já existe item com a mesma chave (produto + data + unidade).
         """
-        if any((i.produto.casefold(), i.data_necessidade) == self.chave()
+        if any((i.produto.casefold(), i.data_necessidade, i.uni) == self.chave()
                for i in pedido.itens):
             raise ConflitoIntegridade(
-                "Item duplicado (mesmo produto e data de necessidade)")
+                "Item duplicado (mesmo produto, data de necessidade e unidade)")
 
     def verificar(self, pedido: Pedido) -> None:
         """Executa todas as verificações de integridade deste formulário.
@@ -78,7 +80,7 @@ class AdicionarItemEntrada(BaseModel):
         """Converte o formulário na entidade `ItemPedido`.
 
         Returns:
-            `ItemPedido` com produto, quant e data_necessidade preenchidos.
+            `ItemPedido` com produto, quant, uni e data_necessidade preenchidos.
         """
         return ItemPedido(**self.model_dump())
 

@@ -5,6 +5,7 @@ O carrinho é guardado no banco, por usuário, e acessado pela API; o dono é o 
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import date
 from typing import Protocol, Self, runtime_checkable
 
 from client.paginas.sisPedidos.entidades.itemCarrinho import ItemCarrinho
@@ -25,12 +26,17 @@ class facedeCarrinhoAPIInterface(Protocol):
         """
         ...
 
-    def adicionar(self, produto_id: int, quant: int) -> list[ItemCarrinho]:
-        """Soma `quant` ao produto no carrinho (cria o item se não existir).
+    def adicionar(self, produto_id: int, quant: int, uni: str,
+                  data_necessidade: date) -> list[ItemCarrinho]:
+        """Soma `quant` ao produto na data e unidade (cria a linha se não existir).
+
+        O mesmo produto pode ter várias linhas, com datas ou unidades diferentes.
 
         Args:
             produto_id: produto a adicionar.
             quant: quantidade a somar (positiva).
+            uni: unidade de medida da quantidade.
+            data_necessidade: data em que o item é necessário.
 
         Returns:
             list[ItemCarrinho]: carrinho após a inclusão.
@@ -40,17 +46,33 @@ class facedeCarrinhoAPIInterface(Protocol):
         """
         ...
 
-    def remover(self, produtos_ids: Iterable[int]) -> None:
-        """Remove produtos do carrinho (os que já não estão nele são ignorados).
+    def remover(self, itens_ids: Iterable[int]) -> None:
+        """Remove linhas do carrinho (as que já não existem são ignoradas).
 
         Args:
-            produtos_ids: produtos a remover.
+            itens_ids: ids das linhas (`ItemCarrinho.id`) a remover.
 
         Returns:
             None.
 
         Raises:
             ApiError: em falha de comunicação com a API.
+        """
+        ...
+
+    def finalizar(self, obra: str, tarefa: str, local_entrega: str) -> int:
+        """Fecha o carrinho: o servidor monta o pedido com as linhas dele e o esvazia.
+
+        Args:
+            obra: obra do pedido.
+            tarefa: tarefa da obra.
+            local_entrega: local de entrega.
+
+        Returns:
+            int: número (id) do pedido criado.
+
+        Raises:
+            ApiError: em falha de comunicação ou se a API recusar (ex.: carrinho vazio).
         """
         ...
 

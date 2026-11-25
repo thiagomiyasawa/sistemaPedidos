@@ -17,14 +17,16 @@ class ItemPedido:
     Attributes:
         produto: nome do produto (obrigatório, não vazio).
         quant: quantidade solicitada (> 0).
-        data_necessidade: data em que o item é necessário; aceita texto ISO e converte.
+        uni: unidade de medida da quantidade (obrigatória, não vazia).
+        data_necessidade: data em que o item é necessário (obrigatória); aceita texto ISO.
         id_pedido: ID do pedido dono do item (None enquanto não persistido).
         id: número sequencial do item dentro do pedido (None enquanto não persistido).
     """
 
     produto: str
     quant: int
-    data_necessidade: date | None = None
+    uni: str
+    data_necessidade: date
     id_pedido: int | None = None
     id: int | None = None
 
@@ -35,7 +37,7 @@ class ItemPedido:
             None.
 
         Raises:
-            ValueError: se `produto` for vazio, `quant` <= 0 ou a data ISO for inválida.
+            ValueError: se `produto` ou `uni` for vazio, `quant` <= 0 ou a data faltar/for inválida.
         """
         if isinstance(self.data_necessidade, str):
             self.data_necessidade = date.fromisoformat(self.data_necessidade)
@@ -43,13 +45,17 @@ class ItemPedido:
             raise ValueError("produto é obrigatório")
         if self.quant <= 0:
             raise ValueError("quant deve ser > 0")
+        if not self.uni.strip():
+            raise ValueError("uni (unidade) é obrigatória")
+        if self.data_necessidade is None:
+            raise ValueError("data_necessidade é obrigatória")
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> Self:
         """Constrói um item a partir de uma linha da tabela `item_pedido`.
 
         Args:
-            row: mapa coluna -> valor, com id, id_pedido, produto, quant e data_necessidade.
+            row: mapa coluna -> valor, com id, id_pedido, produto, quant, uni e data_necessidade.
 
         Returns:
             Self: o item correspondente.
@@ -58,16 +64,16 @@ class ItemPedido:
             KeyError: se faltar alguma coluna esperada.
             ValueError: se os valores violarem as regras da entidade.
         """
-        return cls(**{k: row[k] for k in ("id", "id_pedido", "produto", "quant", "data_necessidade")})
+        return cls(**{k: row[k] for k in ("id", "id_pedido", "produto", "quant", "uni", "data_necessidade")})
 
     def to_row(self) -> dict[str, Any]:
         """Converte o item para o formato da tabela `item_pedido`.
 
         Returns:
-            dict[str, Any]: colunas -> valores, com `data_necessidade` em texto ISO (ou None).
+            dict[str, Any]: colunas -> valores, com `data_necessidade` em texto ISO.
         """
         d = asdict(self)
-        d["data_necessidade"] = self.data_necessidade.isoformat() if self.data_necessidade else None
+        d["data_necessidade"] = self.data_necessidade.isoformat()
         return d
 
 

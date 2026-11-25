@@ -88,6 +88,7 @@ Obra = texto(150)
 Tarefa = texto(150)
 LocalEntrega = texto(250)
 Produto = texto(250)
+Unidade = texto(20)  # unidade de medida: un, m, kg...
 
 # Numéricos
 CodRM = Annotated[int, Field(ge=1, le=INT_MAX)]

@@ -92,12 +92,24 @@ def _pagina_carrinho() -> QWidget:
     return PaginaCarrinho()
 
 
+def _pagina_meus_pedidos() -> QWidget:
+    """Cria a página com os pedidos do usuário e seus itens.
+
+    Returns:
+        A página, pronta para ser colocada na área de conteúdo.
+    """
+    from client.paginas.sisPedidos.paginaMeusPedidos.paginaMeusPedidos import PaginaMeusPedidos
+
+    return PaginaMeusPedidos()
+
+
 # (título do item, fábrica da página). Para um módulo novo, basta acrescentar uma linha.
 ENTRADAS: list[tuple[str, Callable[[], QWidget]]] = [
     ("KPIs - Geral", _pagina_kpi_geral),
     ("KPIs - Por obra", _pagina_kpi_obra),
     ("Catálogo", _pagina_catalogo),
     ("Carrinho", _pagina_carrinho),
+    ("Meus pedidos", _pagina_meus_pedidos),
 ]
 
 

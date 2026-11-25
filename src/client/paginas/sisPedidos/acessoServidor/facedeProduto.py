@@ -5,7 +5,7 @@
 
 Uso:
     with FacedeProdutoAPI() as produtos:
-        catalogo = produtos.listar()
+        pagina, total = produtos.listar_pagina(busca="cabo", limit=30, offset=0)
 """
 from __future__ import annotations
 
@@ -65,15 +65,25 @@ class FacedeProdutoAPI(facedeProdutoAPIInterface):
         self.close()
 
     # --- produtos ----------------------------------------------------------
-    def listar(self) -> list[Produto]:
-        """Obtém o catálogo (`GET /produtos`).
+    def listar_pagina(self, busca: str | None = None, categoria: str | None = None,
+                      limit: int = 30, offset: int = 0) -> tuple[list[Produto], int]:
+        """Obtém uma página do catálogo (`GET /produtos`), já filtrada pelo servidor.
+
+        Args:
+            busca: texto procurado no código ou na descrição, se informado.
+            categoria: filtra por categoria exata, se informada.
+            limit: produtos por página.
+            offset: quantidade de produtos a pular.
 
         Returns:
-            list[Produto]: produtos na ordem entregue pela API (categoria e código).
+            tuple[list[Produto], int]: produtos da página (por categoria e código) e o total que
+            casa com o filtro, somando todas as páginas.
 
         Raises:
             ApiError: em falha de comunicação com a API.
         """
+        dados, total = self.api.get_pagina(
+            "/produtos", busca=busca, categoria=categoria, limit=limit, offset=offset)
         return [
             Produto(
                 id=p["id"],
@@ -81,5 +91,16 @@ class FacedeProdutoAPI(facedeProdutoAPIInterface):
                 descricao=p.get("descricao") or "",
                 categoria=p.get("categoria") or "",
             )
-            for p in self.api.get("/produtos")
-        ]
+            for p in dados
+        ], total
+
+    def categorias(self) -> list[str]:
+        """Categorias distintas do catálogo (`GET /produtos/categorias`).
+
+        Returns:
+            list[str]: categorias em ordem alfabética.
+
+        Raises:
+            ApiError: em falha de comunicação com a API.
+        """
+        return self.api.get("/produtos/categorias")

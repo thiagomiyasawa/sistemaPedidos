@@ -106,10 +106,9 @@ class AdapterAPI(adapterAPIInterface):
             self._client.headers.pop("X-API-Key", None)
 
     # --- requisição genérica ----------------------------------------------
-    def request(
-        self, metodo: str, caminho: str, *, params: dict | None = None, json: Any = None
-    ) -> Any:
-        """Envia a requisição e devolve o JSON da resposta (None se 204).
+    def _enviar(self, metodo: str, caminho: str, *, params: dict | None = None,
+                json: Any = None) -> httpx.Response:
+        """Envia a requisição e devolve a resposta, convertendo falhas em `ApiError`.
 
         Args:
             metodo: método HTTP (GET, POST, PATCH, DELETE).
@@ -118,7 +117,7 @@ class AdapterAPI(adapterAPIInterface):
             json: corpo JSON da requisição, ou None.
 
         Returns:
-            JSON decodificado da resposta, ou None se 204 ou sem corpo.
+            httpx.Response: resposta de sucesso.
 
         Raises:
             ApiError: em timeout, falha de conexão ou resposta HTTP de erro.
@@ -137,12 +136,51 @@ class AdapterAPI(adapterAPIInterface):
                 detalhe = resp.json().get("detail")
             except ValueError:
                 detalhe = resp.text
-            raise ApiError(
-                f"HTTP {resp.status_code} em {metodo} {caminho}: {detalhe}",
-                resp.status_code,
-                detalhe,
-            )
+            raise ApiError(f"HTTP {resp.status_code} em {metodo} {caminho}: {detalhe}",
+                           resp.status_code, detalhe)
+        return resp
+
+    def request(self, metodo: str, caminho: str, *, params: dict | None = None,
+                json: Any = None) -> Any:
+        """Envia a requisição e devolve o JSON da resposta (None se 204).
+
+        Args:
+            metodo: método HTTP (GET, POST, PATCH, DELETE).
+            caminho: caminho do endpoint, relativo à URL base.
+            params: parâmetros de query; valores None são descartados.
+            json: corpo JSON da requisição, ou None.
+
+        Returns:
+            JSON decodificado da resposta, ou None se 204 ou sem corpo.
+
+        Raises:
+            ApiError: em timeout, falha de conexão ou resposta HTTP de erro.
+        """
+        resp = self._enviar(metodo, caminho, params=params, json=json)
         return None if resp.status_code == 204 or not resp.content else resp.json()
+
+    def get_pagina(self, caminho: str, **params: Any) -> tuple[Any, int]:
+        """GET de uma lista paginada: devolve a página e o total de itens do filtro.
+
+        O total vem do cabeçalho `X-Total-Count`; se a API não o enviar, usa o tamanho da página.
+
+        Args:
+            caminho: caminho do endpoint.
+            **params: parâmetros de query (valores None são ignorados).
+
+        Returns:
+            tuple[Any, int]: JSON da página (lista) e o total somando todas as páginas.
+
+        Raises:
+            ApiError: em falha de rede, timeout ou resposta de erro.
+        """
+        resp = self._enviar("GET", caminho, params=params)
+        dados = resp.json() if resp.content else []
+        try:
+            total = int(resp.headers["X-Total-Count"])
+        except (KeyError, ValueError):
+            total = len(dados)
+        return dados, total
 
     def get(self, caminho: str, **params: Any) -> Any:
         """Faz uma requisição GET.

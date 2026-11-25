@@ -39,7 +39,7 @@ class CriarPedidoEntrada(BaseModel):
 
     @model_validator(mode="after")
     def _sem_itens_duplicados(self) -> Self:
-        """Garante que não há itens repetidos (mesmo produto e data de necessidade).
+        """Garante que não há itens repetidos (mesmo produto, data de necessidade e unidade).
 
         Returns:
             A própria instância, se válida.
@@ -49,7 +49,7 @@ class CriarPedidoEntrada(BaseModel):
         """
         chaves = [i.chave() for i in self.itens]
         if len(chaves) != len(set(chaves)):
-            raise ValueError("itens duplicados (mesmo produto e data de necessidade)")
+            raise ValueError("itens duplicados (mesmo produto, data de necessidade e unidade)")
         return self
 
     def para_entidade(self) -> Pedido:

@@ -46,6 +46,29 @@ class facedePedidoAPIInterface(facedePedidoInterface, Protocol):
         """
         ...
 
+    def listar_meus_pagina(self, status_atual: str | None = None, limit: int = 30,
+                           offset: int = 0) -> tuple[list[Pedido], int]:
+        """Uma página dos pedidos do usuário autenticado, do mais novo para o mais antigo.
+
+        Args:
+            status_atual: filtra por status, ou None.
+            limit: pedidos por página.
+            offset: quantidade de pedidos a pular.
+
+        Returns:
+            tuple[list[Pedido], int]: pedidos da página (sem itens) e o total que casa com o
+            filtro, somando todas as páginas.
+        """
+        ...
+
+    def status_dos_meus(self) -> list[str]:
+        """Status distintos dos pedidos do usuário, em ordem alfabética.
+
+        Returns:
+            list[str]: status existentes.
+        """
+        ...
+
     def close(self) -> None:
         """Libera a conexão/recursos.
 

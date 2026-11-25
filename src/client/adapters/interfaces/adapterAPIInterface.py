@@ -101,6 +101,21 @@ class adapterAPIInterface(Protocol):
         """
         ...
 
+    def get_pagina(self, caminho: str, **params: Any) -> tuple[Any, int]:
+        """GET de uma lista paginada: devolve a página e o total de itens do filtro.
+
+        Args:
+            caminho: caminho do endpoint.
+            **params: parâmetros de query (valores None são ignorados).
+
+        Returns:
+            tuple[Any, int]: JSON da página (lista) e o total somando todas as páginas.
+
+        Raises:
+            ApiError: em falha de rede, timeout ou resposta de erro.
+        """
+        ...
+
     def post(self, caminho: str, json: Any = None) -> Any:
         """Faz uma requisição POST.
 

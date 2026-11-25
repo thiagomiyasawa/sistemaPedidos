@@ -16,7 +16,8 @@ class ItemPedidoSaida(BaseModel):
         id_pedido: Identificador do pedido dono do item.
         produto: Nome do produto.
         quant: Quantidade solicitada.
-        data_necessidade: Data de necessidade (opcional).
+        uni: Unidade de medida da quantidade.
+        data_necessidade: Data de necessidade do item.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -25,7 +26,8 @@ class ItemPedidoSaida(BaseModel):
     id_pedido: int | None
     produto: str
     quant: int
-    data_necessidade: date | None
+    uni: str
+    data_necessidade: date
 
     def para_entidade(self) -> ItemPedido:
         """Converte a resposta JSON na entidade `ItemPedido`.

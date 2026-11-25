@@ -73,7 +73,8 @@ from bancoDadosSQL.formulariosAPI.atualizarPedido import (
 )
 from bancoDadosSQL.formulariosAPI.carrinho import (
     AdicionarCarrinhoEntrada,
-    IdProduto,
+    FinalizarCarrinhoEntrada,
+    IdItemCarrinho,
     ItemCarrinhoSaida,
     ListarCarrinhoSaida,
 )
@@ -89,7 +90,12 @@ from bancoDadosSQL.formulariosAPI.login import (
     RegistroSaida,
 )
 from bancoDadosSQL.formulariosAPI.listarItens import ListarItensSaida
-from bancoDadosSQL.formulariosAPI.listarProdutos import ListarProdutosSaida, ProdutoSaida
+from bancoDadosSQL.formulariosAPI.listarProdutos import (
+    CategoriasSaida,
+    ListarProdutosEntrada,
+    ListarProdutosSaida,
+    ProdutoSaida,
+)
 from bancoDadosSQL.formulariosAPI.listarPedidos import (
     ListarPedidosEntrada,
     ListarPedidosSaida,
@@ -119,6 +125,7 @@ def ambiente_dev() -> bool:
 
 
 CABECALHO_API_KEY = "X-API-Key"
+CABECALHO_TOTAL = "X-Total-Count"  # total de itens que casam com o filtro (listas paginadas)
 _esquema_api_key = APIKeyHeader(name=CABECALHO_API_KEY, auto_error=False)
 # Rotas que dispensam a chave (é por elas que a chave é obtida).
 ROTAS_PUBLICAS = frozenset({"/login", "/registro"})
@@ -374,6 +381,9 @@ class APIGateway:
         r = APIRouter(prefix="/pedidos", tags=["pedidos"])
         r.add_api_route("", self.listar_pedidos, methods=["GET"],
                         dependencies=perm("pedido", "ler"))
+        # Antes de "/{pedido_id}": senão "status" seria lido como id.
+        r.add_api_route("/status", self.status_dos_pedidos, methods=["GET"],
+                        dependencies=perm("pedido", "ler"))
         r.add_api_route("", self.criar_pedido, methods=["POST"], dependencies=perm("pedido", "criar"),
                         status_code=status.HTTP_201_CREATED)
         r.add_api_route("/{pedido_id}", self.obter_pedido, methods=["GET"],
@@ -391,6 +401,8 @@ class APIGateway:
         # Catálogo: lê quem pode ler pedidos (não há permissão própria para produtos).
         self.app.add_api_route("/produtos", self.listar_produtos, methods=["GET"],
                                tags=["produtos"], dependencies=perm("pedido", "ler"))
+        self.app.add_api_route("/produtos/categorias", self.categorias_de_produtos, methods=["GET"],
+                               tags=["produtos"], dependencies=perm("pedido", "ler"))
 
         # Carrinho: sempre do usuário autenticado (só vê/altera o próprio); não há permissão
         # própria, então basta poder ler pedidos.
@@ -398,9 +410,11 @@ class APIGateway:
         rc.add_api_route("", self.listar_carrinho, methods=["GET"])
         rc.add_api_route("", self.limpar_carrinho, methods=["DELETE"],
                          status_code=status.HTTP_204_NO_CONTENT)
+        rc.add_api_route("/finalizar", self.finalizar_carrinho, methods=["POST"],
+                         status_code=status.HTTP_201_CREATED, dependencies=perm("pedido", "criar"))
         rc.add_api_route("/itens", self.adicionar_ao_carrinho, methods=["POST"],
                          status_code=status.HTTP_201_CREATED)
-        rc.add_api_route("/itens/{produto_id}", self.remover_do_carrinho, methods=["DELETE"],
+        rc.add_api_route("/itens/{item_id}", self.remover_do_carrinho, methods=["DELETE"],
                          status_code=status.HTTP_204_NO_CONTENT)
         self.app.include_router(rc)
 
@@ -602,34 +616,69 @@ class APIGateway:
         self,
         filtros: Annotated[ListarPedidosEntrada, Query()],
         ident: Annotated[Identidade, Depends(identidade_atual)],
+        response: Response,
     ) -> ListarPedidosSaida:
         """Lista pedidos com filtros opcionais e paginação.
 
         Args:
-            filtros: parâmetros de query (obra, status_atual, limit, offset).
-            ident: usuário autenticado (sem `todos` em `pedido`, vê só os próprios pedidos).
+            filtros: parâmetros de query (obra, status_atual, ordem, apenas_meus, limit, offset).
+            ident: usuário autenticado (sem `todos` em `pedido`, ou com `apenas_meus`, vê só os
+                próprios pedidos).
+            response: resposta HTTP, onde o total vai no cabeçalho `X-Total-Count`.
 
         Returns:
-            ListarPedidosSaida: lista de pedidos (sem itens).
+            ListarPedidosSaida: a página de pedidos (sem itens).
         """
+        user_id = None if self._ve_todos(ident) and not filtros.apenas_meus else ident.user_id
         with self._facede() as f:
-            pedidos = f.listar(
-                filtros.obra,
-                filtros.status_atual,
-                filtros.limit,
-                filtros.offset,
-                None if self._ve_todos(ident) else ident.user_id,
-            )
+            pedidos = f.listar(filtros.obra, filtros.status_atual, filtros.limit, filtros.offset,
+                               user_id, filtros.ordem)
+            response.headers[CABECALHO_TOTAL] = str(f.contar(filtros.obra, filtros.status_atual, user_id))
             return [PedidoSaida.model_validate(p) for p in pedidos]
 
-    def listar_produtos(self) -> ListarProdutosSaida:
-        """Lista o catálogo de produtos, ordenado por categoria e código.
+    def status_dos_pedidos(
+        self,
+        ident: Annotated[Identidade, Depends(identidade_atual)],
+        apenas_meus: bool = False,
+    ) -> list[str]:
+        """Status distintos dos pedidos que o usuário pode ver (para montar o filtro de status).
+
+        Args:
+            ident: usuário autenticado.
+            apenas_meus: se True, só considera os pedidos do próprio usuário.
 
         Returns:
-            ListarProdutosSaida: produtos com id, código, descrição e categoria.
+            list[str]: status existentes, em ordem alfabética.
+        """
+        user_id = None if self._ve_todos(ident) and not apenas_meus else ident.user_id
+        with self._facede() as f:
+            return f.status_distintos(user_id)
+
+    def listar_produtos(
+        self, filtros: Annotated[ListarProdutosEntrada, Query()], response: Response
+    ) -> ListarProdutosSaida:
+        """Uma página do catálogo, ordenada por categoria e código, com busca e categoria.
+
+        Args:
+            filtros: parâmetros de query (busca, categoria, limit, offset).
+            response: resposta HTTP, onde o total vai no cabeçalho `X-Total-Count`.
+
+        Returns:
+            ListarProdutosSaida: a página de produtos com id, código, descrição e categoria.
         """
         with self._sessao(self._produto_factory) as f:
-            return [ProdutoSaida.model_validate(p) for p in f.listar()]
+            produtos = f.listar(filtros.busca, filtros.categoria, filtros.limit, filtros.offset)
+            response.headers[CABECALHO_TOTAL] = str(f.contar(filtros.busca, filtros.categoria))
+            return [ProdutoSaida.model_validate(p) for p in produtos]
+
+    def categorias_de_produtos(self) -> CategoriasSaida:
+        """Categorias distintas do catálogo (para montar o filtro de categoria).
+
+        Returns:
+            CategoriasSaida: categorias em ordem alfabética.
+        """
+        with self._sessao(self._produto_factory) as f:
+            return f.categorias()
 
     # --- carrinho ------------------------------------------------------------
     def listar_carrinho(
@@ -654,7 +703,7 @@ class APIGateway:
         """Soma um produto ao carrinho do usuário (cria o item se ainda não existir).
 
         Args:
-            corpo: produto e quantidade.
+            corpo: produto, quantidade, unidade e data de necessidade.
             ident: usuário autenticado (dono do carrinho).
 
         Returns:
@@ -664,30 +713,53 @@ class APIGateway:
             HTTPException: 404 se o produto não existir.
         """
         with self._sessao(self._carrinho_factory) as f:
-            if not f.adicionar(ident.user_id, corpo.produto_id, corpo.quantidade):
+            if not f.adicionar(ident.user_id, corpo.produto_id, corpo.quantidade,
+                               corpo.unidade, corpo.data_necessidade):
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
             return [ItemCarrinhoSaida.model_validate(i) for i in f.listar(ident.user_id)]
 
     def remover_do_carrinho(
         self,
-        produto_id: IdProduto,
+        item_id: IdItemCarrinho,
         ident: Annotated[Identidade, Depends(identidade_atual)],
     ) -> None:
-        """Remove um produto do carrinho do usuário.
+        """Remove um item (linha) do carrinho do usuário.
 
         Args:
-            produto_id: produto a remover.
+            item_id: id da linha do carrinho a remover.
             ident: usuário autenticado (dono do carrinho).
 
         Returns:
             None (status 204).
 
         Raises:
-            HTTPException: 404 se o produto não estiver no carrinho.
+            HTTPException: 404 se a linha não existir ou não for do usuário.
         """
         with self._sessao(self._carrinho_factory) as f:
-            if not f.remover(ident.user_id, [produto_id]):
+            if not f.remover(ident.user_id, [item_id]):
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Item não está no carrinho")
+
+    def finalizar_carrinho(
+        self,
+        corpo: FinalizarCarrinhoEntrada,
+        ident: Annotated[Identidade, Depends(identidade_atual)],
+    ) -> CriarPedidoSaida:
+        """Fecha o carrinho: o servidor monta o pedido com as linhas dele e esvazia o carrinho.
+
+        Args:
+            corpo: obra, tarefa e local de entrega do pedido.
+            ident: usuário autenticado (dono do carrinho e do pedido).
+
+        Returns:
+            CriarPedidoSaida: o pedido criado, com seus itens (status 201).
+
+        Raises:
+            HTTPException: 422 se o carrinho estiver vazio ou os dados forem recusados.
+        """
+        with self._sessao(self._carrinho_factory) as f:
+            pedido_id = f.finalizar(ident.user_id, corpo.obra, corpo.tarefa, corpo.local_entrega)
+        with self._facede() as f:
+            return PedidoSaida.model_validate(f.obter(pedido_id))
 
     def limpar_carrinho(
         self, ident: Annotated[Identidade, Depends(identidade_atual)]
