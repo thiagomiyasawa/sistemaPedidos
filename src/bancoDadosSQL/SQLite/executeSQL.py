@@ -54,7 +54,8 @@ def consultar(sql: str, params: Params = ()) -> list[dict[str, Any]]:
         list[dict[str, Any]]: linhas coluna -> valor.
     """
     with SQLiteAdapter() as db:
-        return db.fetch_all(sql, params)
+        db.execute(sql, params)
+        return db.fetch_all()
 
 
 def consultar_um(sql: str, params: Params = ()) -> dict[str, Any] | None:
@@ -68,7 +69,8 @@ def consultar_um(sql: str, params: Params = ()) -> dict[str, Any] | None:
         dict[str, Any] | None: primeira linha, ou None se vazio.
     """
     with SQLiteAdapter() as db:
-        return db.fetch_one(sql, params)
+        db.execute(sql, params)
+        return db.fetch_one()
 
 
 def consultar_lotes(
@@ -88,7 +90,8 @@ def consultar_lotes(
         ValueError: se `tamanho_lote` < 1.
     """
     with SQLiteAdapter() as db:
-        yield from db.fetch_batches(sql, params, tamanho_lote)
+        db.execute(sql, params)
+        yield from db.fetch_batches(tamanho_lote)
 
 
 # --- escrita ---------------------------------------------------------------
@@ -109,9 +112,10 @@ def executar(sql: str, params: Params = ()) -> list[dict[str, Any]] | int:
         sqlite3.Error: em erro de SQL ou integridade.
     """
     with SQLiteAdapter() as db:
+        afetadas = db.execute(sql, params)
         if _devolve_linhas(sql):
-            return db.fetch_all(sql, params)
-        return db.execute(sql, params).rowcount
+            return db.fetch_all()
+        return afetadas
 
 
 def executar_lote(sql: str, params_seq: Sequence[Params]) -> int:

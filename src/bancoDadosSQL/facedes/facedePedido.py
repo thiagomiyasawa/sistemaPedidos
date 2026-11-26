@@ -41,7 +41,8 @@ class FacedePedido(facedePedidoInterface):
         Returns:
             Pedido | None: o pedido, ou None se não existir.
         """
-        row = self.db.fetch_one("SELECT * FROM pedido WHERE id = ?", (pedido_id,))
+        self.db.execute("SELECT * FROM pedido WHERE id = ?", (pedido_id,))
+        row = self.db.fetch_one()
         if row is None:
             return None
         pedido = Pedido.from_row(row)
@@ -86,9 +87,10 @@ class FacedePedido(facedePedidoInterface):
         """
         where, params = self._filtro(obra, status_atual, user_id)
         direcao = "DESC" if ordem == "desc" else "ASC"
-        rows = self.db.fetch_all(
+        self.db.execute(
             f"SELECT * FROM pedido {where} ORDER BY id {direcao} LIMIT ? OFFSET ?",
             [*params, limit, offset])
+        rows = self.db.fetch_all()
         return [Pedido.from_row(r) for r in rows]
 
     def contar(self, obra: str | None = None, status_atual: str | None = None,
@@ -104,7 +106,8 @@ class FacedePedido(facedePedidoInterface):
             int: total de pedidos que casam com o filtro.
         """
         where, params = self._filtro(obra, status_atual, user_id)
-        return self.db.fetch_one(f"SELECT COUNT(*) AS n FROM pedido {where}", params)["n"]
+        self.db.execute(f"SELECT COUNT(*) AS n FROM pedido {where}", params)
+        return self.db.fetch_one()["n"]
 
     def status_distintos(self, user_id: int | None = None) -> list[str]:
         """Status distintos dos pedidos, em ordem alfabética.
@@ -116,7 +119,8 @@ class FacedePedido(facedePedidoInterface):
             list[str]: status existentes.
         """
         where, params = self._filtro(None, None, user_id)
-        rows = self.db.fetch_all(f"SELECT DISTINCT status_atual FROM pedido {where} ORDER BY status_atual", params)
+        self.db.execute(f"SELECT DISTINCT status_atual FROM pedido {where} ORDER BY status_atual", params)
+        rows = self.db.fetch_all()
         return [r["status_atual"] for r in rows]
 
     def itens_do_pedido(self, pedido_id: int) -> list[ItemPedido]:
@@ -128,8 +132,9 @@ class FacedePedido(facedePedidoInterface):
         Returns:
             list[ItemPedido]: itens do pedido (vazia se não houver).
         """
-        rows = self.db.fetch_all(
+        self.db.execute(
             "SELECT * FROM item_pedido WHERE id_pedido = ?", (pedido_id,))
+        rows = self.db.fetch_all()
         return [ItemPedido.from_row(r) for r in rows]
 
     def salvar(self, pedido: Pedido) -> Pedido:
@@ -156,9 +161,10 @@ class FacedePedido(facedePedidoInterface):
                 self.db.execute(f"UPDATE pedido SET {sets} WHERE id = :_id",
                                 {**dados, "_id": pedido.id})
             # `id` do item = número sequencial dentro do pedido (1, 2, 3...).
-            ultimo = self.db.fetch_one(
+            self.db.execute(
                 "SELECT COALESCE(MAX(id), 0) AS n FROM item_pedido WHERE id_pedido = ?",
-                (pedido.id,))["n"]
+                (pedido.id,))
+            ultimo = self.db.fetch_one()["n"]
             for item in pedido.itens:
                 if item.id_pedido is None:
                     ultimo += 1
@@ -178,5 +184,4 @@ class FacedePedido(facedePedidoInterface):
         """
         with self.db.transaction():
             self.db.execute("DELETE FROM item_pedido WHERE id_pedido = ?", (pedido_id,))
-            cur = self.db.execute("DELETE FROM pedido WHERE id = ?", (pedido_id,))
-            return cur.rowcount > 0
+            return self.db.execute("DELETE FROM pedido WHERE id = ?", (pedido_id,)) > 0

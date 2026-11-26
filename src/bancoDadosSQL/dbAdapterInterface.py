@@ -20,7 +20,8 @@ class dbAdapterInterface(Protocol):
     Uso:
         with MeuAdapter() as db:
             db.execute("INSERT INTO kpi (nome) VALUES (?)", ("vendas",))
-            linhas = db.fetch_all("SELECT * FROM kpi")
+            db.execute("SELECT * FROM kpi")
+            linhas = db.fetch_all()
     """
 
     # --- conexão -----------------------------------------------------------
@@ -76,15 +77,17 @@ class dbAdapterInterface(Protocol):
         ...
 
     # --- escrita -----------------------------------------------------------
-    def execute(self, sql: str, params: Params = ()) -> Any:
-        """Executa um comando em transação e devolve o cursor.
+    def execute(self, sql: str, params: Params = ()) -> int:
+        """Executa um comando em transação e guarda o cursor dentro do adapter.
+
+        As linhas de uma consulta são lidas por `fetch_*`.
 
         Args:
             sql: comando SQL, com marcadores de parâmetros.
             params: valores posicionais (sequência) ou nomeados (dict).
 
         Returns:
-            Any: cursor resultante (ex.: para ler `rowcount`).
+            int: número de linhas afetadas (-1 em consultas).
         """
         ...
 
@@ -124,38 +127,32 @@ class dbAdapterInterface(Protocol):
         ...
 
     # --- leitura -----------------------------------------------------------
-    def fetch_all(self, sql: str, params: Params = ()) -> list[Linha]:
-        """Devolve todas as linhas do resultado como dicionários.
-
-        Args:
-            sql: consulta SQL.
-            params: valores posicionais ou nomeados da consulta.
+    def fetch_all(self) -> list[Linha]:
+        """Consome o cursor do último `execute()` e devolve todas as linhas.
 
         Returns:
             list[Linha]: linhas como dicionários coluna -> valor (vazia se não houver).
+
+        Raises:
+            RuntimeError: se não há cursor ativo (nenhum `execute()` antes).
         """
         ...
 
-    def fetch_one(self, sql: str, params: Params = ()) -> Linha | None:
-        """Devolve a primeira linha do resultado, ou None se vazio.
-
-        Args:
-            sql: consulta SQL.
-            params: valores posicionais ou nomeados da consulta.
+    def fetch_one(self) -> Linha | None:
+        """Consome a próxima linha do cursor do último `execute()`.
 
         Returns:
-            Linha | None: primeira linha como dicionário, ou None.
+            Linha | None: linha como dicionário, ou None se não houver mais.
+
+        Raises:
+            RuntimeError: se não há cursor ativo.
         """
         ...
 
-    def fetch_batches(
-        self, sql: str, params: Params = (), tamanho_lote: int = 1000
-    ) -> Generator[list[Linha]]:
-        """Devolve o resultado em lotes de até `tamanho_lote` linhas.
+    def fetch_batches(self, tamanho_lote: int = 1000) -> Generator[list[Linha]]:
+        """Consome o cursor do último `execute()` em lotes de até `tamanho_lote` linhas.
 
         Args:
-            sql: consulta SQL.
-            params: valores posicionais ou nomeados da consulta.
             tamanho_lote: máximo de linhas por lote (>= 1).
 
         Yields:
@@ -163,6 +160,7 @@ class dbAdapterInterface(Protocol):
 
         Raises:
             ValueError: se `tamanho_lote` < 1.
+            RuntimeError: se não há cursor ativo.
         """
         ...
 

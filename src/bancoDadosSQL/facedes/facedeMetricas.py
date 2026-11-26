@@ -79,8 +79,9 @@ class FacedeMetricas(facedeMetricasInterface):
             list[str]: valores distintos ordenados.
         """
         # `coluna` vem só deste módulo (constantes), nunca do usuário.
-        rows = self.db.fetch_all(
+        self.db.execute(
             f"SELECT DISTINCT {coluna} AS v FROM pedido {onde} ORDER BY {coluna}", params)
+        rows = self.db.fetch_all()
         return [r["v"] for r in rows]
 
     def valores_filtros(self) -> dict[str, list[str]]:
@@ -135,9 +136,10 @@ class FacedeMetricas(facedeMetricasInterface):
             ValueError: se `tarefa` for informada sem `obra`.
         """
         where, params = self._filtro_pedidos(obra, tarefa, status_atual, origem, desde, ate)
-        rows = self.db.fetch_all(
+        self.db.execute(
             "SELECT i.produto AS produto, SUM(i.quant) AS quantidade "
             "FROM item_pedido i JOIN pedido p ON p.id = i.id_pedido "
             f"{where} GROUP BY i.produto ORDER BY quantidade DESC, i.produto LIMIT ?",
             [*params, limite])
+        rows = self.db.fetch_all()
         return [(r["produto"], r["quantidade"]) for r in rows]

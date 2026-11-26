@@ -59,12 +59,13 @@ class FacedeAutorizacao(facedeAutorizacaoInterface):
         # Uma consulta só: linhas do usuário + linhas do cargo das tabelas em que o
         # usuário NÃO tem linha (a do usuário substitui a do cargo).
         cols = ", ".join(_COLUNAS)
-        rows = self.db.fetch_all(
+        self.db.execute(
             f"SELECT tabela, {cols} FROM usuario_permissao WHERE user_id = :u "
             f"UNION ALL "
             f"SELECT tabela, {cols} FROM cargo_permissao WHERE cargo_id = :c "
             f"AND tabela NOT IN (SELECT tabela FROM usuario_permissao WHERE user_id = :u)",
             {"u": user_id, "c": cargo_id})
+        rows = self.db.fetch_all()
         return {r["tabela"].lower(): _permissao(r) for r in rows}
 
     _USUARIO = ("SELECT u.id AS id, u.nome AS nome, u.cargo_id AS cargo_id, c.nome AS cargo, u.ativo AS ativo "
@@ -79,7 +80,8 @@ class FacedeAutorizacao(facedeAutorizacaoInterface):
         Returns:
             dict[str, Any] | None: id, nome, cargo e ativo; None se não existir.
         """
-        return self.db.fetch_one(f"{self._USUARIO} WHERE u.id = ?", (user_id,))
+        self.db.execute(f"{self._USUARIO} WHERE u.id = ?", (user_id,))
+        return self.db.fetch_one()
 
     def listar_usuarios(self, apenas_pendentes: bool = False) -> list[dict[str, Any]]:
         """Lista usuários por id (sem a senha).
@@ -91,7 +93,8 @@ class FacedeAutorizacao(facedeAutorizacaoInterface):
             list[dict[str, Any]]: usuários encontrados.
         """
         where = "WHERE u.ativo = 0" if apenas_pendentes else ""
-        return self.db.fetch_all(f"{self._USUARIO} {where} ORDER BY u.id")
+        self.db.execute(f"{self._USUARIO} {where} ORDER BY u.id")
+        return self.db.fetch_all()
 
     def atualizar_usuario(self, user_id: int, ativo: bool | None = None,
                           cargo: str | None = None) -> bool:
@@ -113,16 +116,16 @@ class FacedeAutorizacao(facedeAutorizacaoInterface):
             sets.append("ativo = ?")
             params.append(1 if ativo else 0)
         if cargo is not None:
-            linha = self.db.fetch_one("SELECT id FROM cargos WHERE nome = ?", (cargo.strip(),))
+            self.db.execute("SELECT id FROM cargos WHERE nome = ?", (cargo.strip(),))
+            linha = self.db.fetch_one()
             if linha is None:
                 raise ValueError(f"cargo desconhecido: {cargo}")
             sets.append("cargo_id = ?")
             params.append(linha["id"])
         if not sets:
             raise ValueError("informe ativo e/ou cargo")
-        cur = self.db.execute(f"UPDATE usuario SET {', '.join(sets)} WHERE id = ?",
-                              [*params, user_id])
-        return cur.rowcount > 0
+        return self.db.execute(f"UPDATE usuario SET {', '.join(sets)} WHERE id = ?",
+                               [*params, user_id]) > 0
 
     def definir_permissao_usuario(self, user_id: int, tabela: str, permissao: Permissao) -> bool:
         """Cria/substitui a linha do usuário para a tabela.
@@ -138,7 +141,8 @@ class FacedeAutorizacao(facedeAutorizacaoInterface):
         Raises:
             ValueError: se a tabela não estiver cadastrada.
         """
-        t = self.db.fetch_one("SELECT nome FROM tabelas WHERE nome = ?", (tabela,))
+        self.db.execute("SELECT nome FROM tabelas WHERE nome = ?", (tabela,))
+        t = self.db.fetch_one()
         if t is None:
             raise ValueError(f"tabela desconhecida: {tabela}")
         if self.obter_usuario(user_id) is None:
@@ -161,6 +165,6 @@ class FacedeAutorizacao(facedeAutorizacaoInterface):
         Returns:
             bool: True se havia linha e foi removida.
         """
-        cur = self.db.execute(
-            "DELETE FROM usuario_permissao WHERE user_id = ? AND tabela = ?", (user_id, tabela))
-        return cur.rowcount > 0
+        return self.db.execute(
+            "DELETE FROM usuario_permissao WHERE user_id = ? AND tabela = ?",
+            (user_id, tabela)) > 0

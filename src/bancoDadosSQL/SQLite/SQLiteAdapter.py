@@ -22,7 +22,8 @@ class SQLiteAdapter(dbAdapterInterface):
         with SQLiteAdapter() as db:
             db.execute("CREATE TABLE kpi (id INTEGER PRIMARY KEY, nome TEXT)")
             db.execute("INSERT INTO kpi (nome) VALUES (?)", ("vendas",))
-            linhas = db.fetch_all("SELECT * FROM kpi")
+            db.execute("SELECT * FROM kpi")
+            linhas = db.fetch_all()
 
     Attributes:
         caminho: caminho do arquivo do banco SQLite.
@@ -40,6 +41,7 @@ class SQLiteAdapter(dbAdapterInterface):
         self._conn: sqlite3.Connection | None = None
         self._depth = 0  # nível de aninhamento de transaction()
         self._falhou = False  # True se algum bloco interno falhou na transação atual
+        self._cursor: sqlite3.Cursor | None = None  # cursor do último execute()
 
     # --- conexão -----------------------------------------------------------
     def connect(self) -> sqlite3.Connection:
@@ -60,6 +62,7 @@ class SQLiteAdapter(dbAdapterInterface):
         Returns:
             None.
         """
+        self._cursor = None
         if self._conn is not None:
             self._conn.close()
             self._conn = None
@@ -130,21 +133,24 @@ class SQLiteAdapter(dbAdapterInterface):
             self._falhou = False
 
     # --- operações ---------------------------------------------------------
-    def execute(self, sql: str, params: Params = ()) -> sqlite3.Cursor:
-        """Executa um comando em transação e devolve o cursor.
+    def execute(self, sql: str, params: Params = ()) -> int:
+        """Executa um comando em transação e guarda o cursor dentro do adapter.
+
+        O cursor é interno: as linhas de uma consulta são lidas por `fetch_*`.
 
         Args:
             sql: comando SQL com marcadores (`?` ou `:nome`).
             params: valores posicionais (sequência) ou nomeados (dict).
 
         Returns:
-            sqlite3.Cursor: cursor do comando (ex.: `rowcount`, `lastrowid`).
+            int: número de linhas afetadas (-1 em consultas).
 
         Raises:
             sqlite3.Error: em erro de SQL ou integridade (após rollback).
         """
         with self.transaction() as conn:
-            return conn.execute(sql, params)
+            self._cursor = conn.execute(sql, params)
+        return self._cursor.rowcount
 
     def execute_many(self, sql: str, params_seq: Sequence[Params]) -> int:
         """Executa o mesmo comando para vários conjuntos de parâmetros, em transação.
@@ -177,53 +183,57 @@ class SQLiteAdapter(dbAdapterInterface):
         with self.transaction() as conn:
             conn.executescript(script)
 
-    def fetch_all(self, sql: str, params: Params = ()) -> list[dict[str, Any]]:
-        """Executa uma consulta e devolve todas as linhas como dicionários.
+    def _cursor_ativo(self) -> sqlite3.Cursor:
+        """Devolve o cursor do último `execute()`.
 
-        Também imprime no console o SQL e os parâmetros (comportamento de depuração).
+        Returns:
+            sqlite3.Cursor: cursor guardado no adapter.
 
-        Args:
-            sql: consulta SQL com marcadores.
-            params: valores posicionais ou nomeados.
+        Raises:
+            RuntimeError: se não houve `execute()` antes (ou o cursor já foi consumido/fechado).
+        """
+        if self._cursor is None:
+            raise RuntimeError("Nenhum cursor ativo: chame execute() antes de fetch.")
+        return self._cursor
+
+    def fetch_all(self) -> list[dict[str, Any]]:
+        """Consome o cursor do último `execute()` e devolve todas as linhas.
+
+        Uso:
+            db.execute("SELECT * FROM kpi WHERE nome = ?", ("vendas",))
+            linhas = db.fetch_all()
 
         Returns:
             list[dict[str, Any]]: linhas coluna -> valor (vazia se nenhuma).
 
         Raises:
-            sqlite3.Error: em erro de SQL.
+            RuntimeError: se não há cursor ativo.
         """
-        cur = self.connect().execute(sql, params)
-        print(f"{sql}  {params}")
-        return [dict(row) for row in cur.fetchall()]
+        return [dict(row) for row in self._cursor_ativo().fetchall()]
 
-    def fetch_one(self, sql: str, params: Params = ()) -> dict[str, Any] | None:
-        """Executa uma consulta e devolve a primeira linha.
-
-        Args:
-            sql: consulta SQL com marcadores.
-            params: valores posicionais ou nomeados.
+    def fetch_one(self) -> dict[str, Any] | None:
+        """Consome a próxima linha do cursor do último `execute()`.
 
         Returns:
-            dict[str, Any] | None: primeira linha como dicionário, ou None se vazio.
+            dict[str, Any] | None: linha como dicionário, ou None se não houver mais.
 
         Raises:
-            sqlite3.Error: em erro de SQL.
+            RuntimeError: se não há cursor ativo.
         """
-        row = self.connect().execute(sql, params).fetchone()
+        row = self._cursor_ativo().fetchone()
         return dict(row) if row else None
 
     def fetch_batches(
-        self, sql: str, params: Params = (), tamanho_lote: int = 1000
+        self, tamanho_lote: int = 1000
     ) -> Generator[list[dict[str, Any]]]:
-        """Devolve o resultado em lotes de até `tamanho_lote` linhas.
+        """Consome o cursor do último `execute()` em lotes de até `tamanho_lote` linhas.
 
-        Usa um cursor explícito e `fetchmany`, sem carregar tudo na memória:
-            for lote in db.fetch_batches("SELECT * FROM kpi", tamanho_lote=500):
+        Usa `fetchmany`, sem carregar tudo na memória:
+            db.execute("SELECT * FROM kpi")
+            for lote in db.fetch_batches(tamanho_lote=500):
                 processar(lote)
 
         Args:
-            sql: consulta SQL com marcadores.
-            params: valores posicionais ou nomeados.
             tamanho_lote: máximo de linhas por lote (>= 1).
 
         Yields:
@@ -231,17 +241,19 @@ class SQLiteAdapter(dbAdapterInterface):
 
         Raises:
             ValueError: se `tamanho_lote` < 1.
-            sqlite3.Error: em erro de SQL.
+            RuntimeError: se não há cursor ativo.
         """
         if tamanho_lote < 1:
             raise ValueError("tamanho_lote deve ser >= 1")
-        cur = self.connect().cursor()
+        # Referência local: outro execute() durante a iteração troca self._cursor.
+        cur = self._cursor_ativo()
         try:
-            cur.execute(sql, params)
             while lote := cur.fetchmany(tamanho_lote):
                 yield [dict(row) for row in lote]
         finally:
             cur.close()
+            if self._cursor is cur:
+                self._cursor = None
 
     def insert(self, tabela: str, dados: dict[str, Any]) -> int:
         """Insere um registro e retorna o ID gerado.
@@ -271,6 +283,7 @@ class SQLiteAdapter(dbAdapterInterface):
         Returns:
             bool: True se existir em `sqlite_master`.
         """
-        return self.fetch_one(
+        self.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (tabela,)
-        ) is not None
+        )
+        return self.fetch_one() is not None

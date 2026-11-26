@@ -68,11 +68,12 @@ class FacedeProduto(facedeProdutoInterface):
             list[dict[str, Any]]: produtos com `id`, `codigo`, `descricao` e `categoria`.
         """
         where, params = self._filtro(busca, categoria)
-        linhas = self.db.fetch_all(
+        self.db.execute(
             f"SELECT id, codigo, descricao, categoria FROM produtos {where} "
             "ORDER BY categoria, codigo, id LIMIT ? OFFSET ?",
             [*params, limit, offset],
         )
+        linhas = self.db.fetch_all()
         return [dict(linha) for linha in linhas]
 
     def contar(self, busca: str | None = None, categoria: str | None = None) -> int:
@@ -86,7 +87,8 @@ class FacedeProduto(facedeProdutoInterface):
             int: total de produtos que casam com o filtro.
         """
         where, params = self._filtro(busca, categoria)
-        return self.db.fetch_one(f"SELECT COUNT(*) AS n FROM produtos {where}", params)["n"]
+        self.db.execute(f"SELECT COUNT(*) AS n FROM produtos {where}", params)
+        return self.db.fetch_one()["n"]
 
     def categorias(self) -> list[str]:
         """Categorias distintas do catálogo, em ordem alfabética.
@@ -94,7 +96,8 @@ class FacedeProduto(facedeProdutoInterface):
         Returns:
             list[str]: categorias (sem valores vazios).
         """
-        linhas = self.db.fetch_all(
+        self.db.execute(
             "SELECT DISTINCT categoria FROM produtos "
             "WHERE categoria IS NOT NULL AND categoria <> '' ORDER BY categoria")
+        linhas = self.db.fetch_all()
         return [linha["categoria"] for linha in linhas]

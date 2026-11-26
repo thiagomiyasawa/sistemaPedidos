@@ -47,13 +47,14 @@ class FacedeCarrinho(facedeCarrinhoInterface):
             list[dict[str, Any]]: itens com `id` (da linha), `produto_id`, `codigo`, `descricao`,
             `categoria`, `quantidade`, `unidade` e `data_necessidade` (texto ISO).
         """
-        linhas = self.db.fetch_all(
+        self.db.execute(
             "SELECT c.id, c.produto_id, p.codigo, p.descricao, p.categoria, c.quantidade, "
             "c.unidade, c.data_necessidade "
             "FROM carrinho_itens_cadastro c JOIN produtos p ON p.id = c.produto_id "
             "WHERE c.user_id = ? ORDER BY c.id",
             (user_id,),
         )
+        linhas = self.db.fetch_all()
         return [dict(linha) for linha in linhas]
 
     def adicionar(self, user_id: int, produto_id: int, quantidade: int, unidade: str,
@@ -73,14 +74,14 @@ class FacedeCarrinho(facedeCarrinhoInterface):
             bool: True se adicionou; False se o produto não existir.
         """
         data = data_necessidade.isoformat()
-        cur = self.db.execute(
+        afetadas = self.db.execute(
             "INSERT INTO carrinho_itens_cadastro (user_id, produto_id, quantidade, unidade, data_necessidade) "
             "SELECT ?, id, ?, ?, ? FROM produtos WHERE id = ? "
             "ON CONFLICT(user_id, produto_id, data_necessidade, unidade) "
             "DO UPDATE SET quantidade = quantidade + excluded.quantidade",
             (user_id, quantidade, unidade, data, produto_id),
         )
-        return cur.rowcount > 0
+        return afetadas > 0
 
     def remover(self, user_id: int, itens_ids: Iterable[int]) -> int:
         """Remove linhas do carrinho (ids que não são do usuário ou não existem são ignorados).
@@ -96,11 +97,10 @@ class FacedeCarrinho(facedeCarrinhoInterface):
         if not ids:
             return 0
         marcas = ",".join("?" * len(ids))
-        cur = self.db.execute(
+        return self.db.execute(
             f"DELETE FROM carrinho_itens_cadastro WHERE user_id = ? AND id IN ({marcas})",
             (user_id, *ids),
         )
-        return cur.rowcount
 
     def finalizar(self, user_id: int, obra: str, tarefa: str, local_entrega: str) -> int:
         """Cria o pedido do usuário com as linhas do carrinho e esvazia o carrinho.
