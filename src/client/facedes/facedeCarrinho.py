@@ -16,11 +16,11 @@ from typing import Any, Self
 
 from client.adapters.adapterAPI import AdapterAPI
 from client.adapters.interfaces.adapterAPIInterface import ApiError, adapterAPIInterface
-from client.paginas.sisPedidos.acessoServidor.interfaces.facedeCarrinhoAPIInterface import (
+from client.facedes.interfaces.facedeCarrinhoAPIInterface import (
     facedeCarrinhoAPIInterface,
 )
-from client.paginas.sisPedidos.entidades.itemCarrinho import ItemCarrinho
-from client.paginas.sisPedidos.entidades.produto import Produto
+from client.entidades.itemCarrinho import ItemCarrinho
+from client.entidades.produto import Produto
 
 
 def _para_itens(dados: list[dict[str, Any]]) -> list[ItemCarrinho]:

@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from datetime import date
 from typing import Protocol, Self, runtime_checkable
 
-from client.paginas.sisPedidos.entidades.itemCarrinho import ItemCarrinho
+from client.entidades.itemCarrinho import ItemCarrinho
 
 
 @runtime_checkable

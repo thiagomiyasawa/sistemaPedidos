@@ -18,7 +18,7 @@ _SRC = Path(__file__).resolve().parents[3]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtCore import Qt, Signal  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QApplication,
     QButtonGroup,
@@ -41,6 +41,9 @@ ESTILO_MENU = """
 #botaoMenu:checked { background: palette(highlight); color: palette(highlighted-text);
                      font-weight: 600; }
 #erroMenu { color: #c0392b; padding: 24px; }
+#botaoSair { padding: 10px 12px; text-align: left; border: 1px solid palette(mid);
+             border-radius: 6px; background: transparent; }
+#botaoSair:hover { background: palette(midlight); }
 """
 
 
@@ -116,10 +119,19 @@ ENTRADAS: list[tuple[str, Callable[[], QWidget]]] = [
 class PaginaMenu(QWidget):
     """Barra lateral de navegação + área de conteúdo com a página selecionada.
 
+    O menu não encerra a sessão: o botão "Sair" só emite `sair`, e quem hospeda o menu faz o
+    logout e troca a tela (ver `main` em `sistemaLogin/paginaLogin.py`).
+
+    Signals:
+        sair(): emitido quando o usuário clica em "Sair".
+
     Attributes:
         pilha: Área de conteúdo; guarda as páginas já criadas.
         botoes: Botões da barra lateral, na ordem de `entradas`.
+        botao_sair: Botão "Sair", no pé da barra lateral.
     """
+
+    sair = Signal()
 
     def __init__(self, entradas: list[tuple[str, Callable[[], QWidget]]] | None = None) -> None:
         """Monta a barra lateral e seleciona o primeiro item.
@@ -159,6 +171,11 @@ class PaginaMenu(QWidget):
             lay_barra.addWidget(botao)
             self.botoes.append(botao)
         lay_barra.addStretch(1)
+        self.botao_sair = QPushButton("Sair")
+        self.botao_sair.setObjectName("botaoSair")
+        self.botao_sair.setCursor(Qt.PointingHandCursor)
+        self.botao_sair.clicked.connect(self.sair)
+        lay_barra.addWidget(self.botao_sair)
 
         self.pilha = QStackedWidget()
 
@@ -225,7 +242,9 @@ def main() -> None:
     app = QApplication.instance() or QApplication(sys.argv)
     janela = QMainWindow()
     janela.setWindowTitle("Monitor KPI")
-    janela.setCentralWidget(PaginaMenu())
+    menu = PaginaMenu()
+    menu.sair.connect(janela.close)  # sem login por aqui, "Sair" só fecha a janela
+    janela.setCentralWidget(menu)
     janela.resize(1200, 800)
     janela.show()
     sys.exit(app.exec())

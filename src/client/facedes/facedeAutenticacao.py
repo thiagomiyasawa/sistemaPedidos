@@ -108,6 +108,31 @@ class FacedeAutenticacaoAPI(facedeAutenticacaoInterface):
             log.warning("Não foi possível gravar a sessão em arquivo", exc_info=True)
         return sessao
 
+    def logout(self) -> bool:
+        """Chama `POST /logout` e, aconteça o que acontecer, esquece a sessão localmente.
+
+        O servidor apaga a chave, o que encerra a sessão em todos os computadores que a
+        compartilham. Um 401 (chave já vencida ou revogada) conta como sucesso. Qualquer outra
+        falha é só registrada no log: o usuário sai do app mesmo assim.
+
+        Returns:
+            bool: True se a API revogou a chave (ou ela já era inválida); False se não foi
+            possível avisar a API.
+        """
+        revogada = True
+        try:
+            self.api.post("/logout")
+        except ApiError as e:
+            revogada = e.status_code == 401
+            if not revogada:
+                log.warning("Não foi possível revogar a chave na API: %s", e)
+        self.api.definir_api_key("")
+        try:
+            self.armazenamento.limpar()
+        except OSError:
+            log.warning("Não foi possível apagar a sessão guardada", exc_info=True)
+        return revogada
+
     def restaurar_sessao(self) -> Sessao | None:
         """Reaproveita a sessão guardada: confere o vencimento e pergunta à API se a chave vale.
 

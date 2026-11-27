@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Protocol, Self, runtime_checkable
 
-from client.paginas.sisPedidos.entidades.produto import Produto
+from client.entidades.produto import Produto
 
 
 @runtime_checkable

@@ -52,6 +52,18 @@ class facedeAutenticacaoInterface(Protocol):
         """
         ...
 
+    def logout(self) -> bool:
+        """Encerra a sessão: revoga a chave na API e esquece a sessão neste computador.
+
+        O lado local é sempre limpo (a chave deixa de ser enviada e a sessão guardada é
+        apagada), mesmo que a API não responda.
+
+        Returns:
+            bool: True se a API revogou a chave (ou ela já era inválida); False se não foi
+            possível avisar a API (a chave continua valendo no servidor até vencer).
+        """
+        ...
+
     def close(self) -> None:
         """Libera a conexão/recursos.
 

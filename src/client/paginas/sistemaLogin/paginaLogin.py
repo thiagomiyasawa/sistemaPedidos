@@ -214,6 +214,10 @@ def main() -> None:
     Em caso de login bem-sucedido, redireciona a mesma janela para o menu. O facade de autenticação já grava a chave no adapter compartilhado (`DIC.api`), então as
     páginas do menu passam a enviá-la sem nenhum passo extra aqui.
 
+    O botão "Sair" do menu faz o logout (revoga a chave, apaga a sessão guardada e esquece o
+    carrinho local) e devolve a mesma janela ao login. Como o menu é descartado, um novo login
+    cria as páginas do zero, sem dados do usuário anterior.
+
     Returns:
         None. Bloqueia até a janela ser fechada.
     """
@@ -224,17 +228,28 @@ def main() -> None:
     def ir_para_menu(*_sessao: str) -> None:
         from client.paginas.sistemaMenu.paginaMenu import PaginaMenu
 
+        menu = PaginaMenu()
+        menu.sair.connect(sair)
         janela.setWindowTitle("Monitor KPI")
         janela.resize(1200, 800)
-        janela.setCentralWidget(PaginaMenu())  # o Qt descarta a página anterior
+        janela.setCentralWidget(menu)  # o Qt descarta a página anterior
+
+    def ir_para_login() -> None:
+        pagina = PaginaLogin()
+        pagina.autenticado.connect(ir_para_menu)
+        janela.setWindowTitle("Monitor KPI - Login")
+        janela.resize(480, 520)
+        janela.setCentralWidget(pagina)
+
+    def sair() -> None:
+        DIC.facede_autenticacao().logout()  # sempre limpa o lado local; falha da API só vai ao log
+        DIC.carrinho().esquecer()
+        ir_para_login()
 
     if DIC.facede_autenticacao().restaurar_sessao() is not None:
         ir_para_menu()
     else:
-        pagina = PaginaLogin()
-        pagina.autenticado.connect(ir_para_menu)
-        janela.setWindowTitle("Monitor KPI - Login")
-        janela.setCentralWidget(pagina)
+        ir_para_login()
     janela.show()
     sys.exit(app.exec())
 

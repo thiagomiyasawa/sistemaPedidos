@@ -11,15 +11,15 @@ from dependency_injector import containers, providers
 
 from client.adapters.adapterAPI import AdapterAPI
 from client.facedes.facedeAutenticacao import FacedeAutenticacaoAPI
-from client.paginas.sisPedidos.acessoServidor.facedeCarrinho import FacedeCarrinhoAPI
-from client.paginas.sisPedidos.acessoServidor.facedeProduto import FacedeProdutoAPI
+from client.facedes.facedeCarrinho import FacedeCarrinhoAPI
+from client.facedes.facedeProduto import FacedeProdutoAPI
 from client.paginas.sisPedidos.carrinho import Carrinho
-from client.paginas.monitorkpi.acessoServidor.facedeMetricas import FacedeMetricasAPI  # noqa: F401  (alternativa à API)
-from client.paginas.monitorkpi.acessoServidor.facedePedido import FacedePedidoAPI
-from client.paginas.monitorkpi.objetosTeste.facedeMetricasTeste import (
+from client.facedes.facedeMetricas import FacedeMetricasAPI  # noqa: F401  (alternativa à API)
+from client.facedes.facedePedido import FacedePedidoAPI
+from client.facedes.objetosTeste.facedeMetricasTeste import (
     FacedeMetricasTeste,
 )
-from client.paginas.monitorkpi.objetosTeste.facedePedidoTeste import FacedePedidoTeste
+from client.facedes.objetosTeste.facedePedidoTeste import FacedePedidoTeste
 
 
 class DIC(containers.DeclarativeContainer):

@@ -86,7 +86,7 @@ class FacedePedido(facedePedidoInterface):
             list[Pedido]: pedidos encontrados (lista vazia se nenhum).
         """
         where, params = self._filtro(obra, status_atual, user_id)
-        direcao = "DESC" if ordem == "desc" else "ASC"
+        direcao = "DESC" if ordem.lower() == "desc" else "ASC"
         self.db.execute(
             f"SELECT * FROM pedido {where} ORDER BY id {direcao} LIMIT ? OFFSET ?",
             [*params, limit, offset])

@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from client.paginas.sisPedidos.entidades.produto import Produto
+from client.entidades.produto import Produto
 
 
 @dataclass

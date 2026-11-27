@@ -13,10 +13,10 @@ from typing import Self
 
 from client.adapters.adapterAPI import AdapterAPI
 from client.adapters.interfaces.adapterAPIInterface import adapterAPIInterface
-from client.paginas.sisPedidos.acessoServidor.interfaces.facedeProdutoAPIInterface import (
+from client.facedes.interfaces.facedeProdutoAPIInterface import (
     facedeProdutoAPIInterface,
 )
-from client.paginas.sisPedidos.entidades.produto import Produto
+from client.entidades.produto import Produto
 
 
 class FacedeProdutoAPI(facedeProdutoAPIInterface):

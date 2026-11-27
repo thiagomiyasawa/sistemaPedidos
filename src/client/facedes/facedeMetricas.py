@@ -16,18 +16,18 @@ from datetime import date
 from typing import Self
 
 from client.adapters.adapterAPI import AdapterAPI
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI import topItens
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI import valoresFiltros
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI.topItens import (
+from client.facedes.formulariosAPI import topItens
+from client.facedes.formulariosAPI import valoresFiltros
+from client.facedes.formulariosAPI.topItens import (
     TopItensEntrada,
 )
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI.valoresFiltros import (
+from client.facedes.formulariosAPI.valoresFiltros import (
     TarefasEntrada,
 )
 from client.adapters.interfaces.adapterAPIInterface import (
     adapterAPIInterface,
 )
-from client.paginas.monitorkpi.acessoServidor.interfaces.facedeMetricasAPIInterface import (
+from client.facedes.interfaces.facedeMetricasAPIInterface import (
     facedeMetricasAPIInterface,
 )
 

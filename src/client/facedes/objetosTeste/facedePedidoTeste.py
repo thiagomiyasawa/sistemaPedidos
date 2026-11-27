@@ -15,7 +15,7 @@ from bancoDadosSQL.dbAdapterInterface import dbAdapterInterface
 from bancoDadosSQL.entidades.pedidos import Pedido
 from bancoDadosSQL.facedes.facedePedido import FacedePedido
 from bancoDadosSQL.SQLite.SQLiteAdapter import SQLiteAdapter
-from client.paginas.monitorkpi.acessoServidor.interfaces.facedePedidoAPIInterface import (
+from client.facedes.interfaces.facedePedidoAPIInterface import (
     facedePedidoAPIInterface,
 )
 

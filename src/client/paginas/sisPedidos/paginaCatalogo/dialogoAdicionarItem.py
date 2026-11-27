@@ -16,8 +16,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from client.paginas.sisPedidos.entidades.produto import Produto
-from client.paginas.sisPedidos.entidades.unidade import (
+from client.entidades.produto import Produto
+from client.entidades.unidade import (
     TAM_MAX_UNIDADE,
     UNIDADE_PADRAO,
     UNIDADES,

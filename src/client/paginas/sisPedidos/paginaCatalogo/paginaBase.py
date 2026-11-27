@@ -42,11 +42,11 @@ from PySide6.QtWidgets import (  # noqa: E402
 from client.adapters.interfaces.adapterAPIInterface import ApiError  # noqa: E402
 from client.componentes.barraPaginacao import BarraPaginacao  # noqa: E402
 from client.DIC import DIC  # noqa: E402
-from client.paginas.sisPedidos.acessoServidor.interfaces.facedeProdutoAPIInterface import (  # noqa: E402
+from client.facedes.interfaces.facedeProdutoAPIInterface import (  # noqa: E402
     facedeProdutoAPIInterface,
 )
 from client.paginas.sisPedidos.carrinho import Carrinho  # noqa: E402
-from client.paginas.sisPedidos.entidades.produto import Produto  # noqa: E402
+from client.entidades.produto import Produto  # noqa: E402
 from client.paginas.sisPedidos.paginaCatalogo.dialogoAdicionarItem import (  # noqa: E402
     DialogoAdicionarItem,
 )

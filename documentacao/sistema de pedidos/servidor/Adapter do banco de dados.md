@@ -1,63 +1,86 @@
+Abstrai o acesso ao banco de dados: o resto do sistema só conhece o contrato `dbAdapterInterface` (um `Protocol`, sem herança obrigatória), então dá para trocar o banco sem afetar os facedes. Implementação atual: `SQLiteAdapter` (ver [[Banco de Dados]]).
 
-É um adapter para abstrair o acesso ao banco de dados, dessa forma é possivel mudar o banco sem afetar o resto do sistema.
+Todos os facedes ([[Facede pedido]], [[Facede carrinho]], [[Facede produto]], [[Facede metricas]], [[Facede autenticacao]], [[Facede autorizacao]]) consomem este adapter.
 
-## funções
+```python
+with SQLiteAdapter() as db:
+    db.execute("INSERT INTO kpi (nome) VALUES (?)", ("vendas",))
+    db.execute("SELECT * FROM kpi")
+    linhas = db.fetch_all()
+```
+
+## Como funciona
+
+- **Consulta em dois passos:** `execute` guarda o cursor dentro do adapter e `fetch_all`, `fetch_one` e `fetch_batches` leem desse cursor. Um novo `execute` troca o cursor, então leia o resultado antes de executar outra coisa.
+- **Linhas são dicionários** (`coluna → valor`).
+- **Parâmetros** são sequência (`?`) ou dict (`:nome`). Nunca monte SQL concatenando valores do usuário.
+- **Toda escrita é transacional**: `execute`, `execute_many`, `execute_script` e `insert` rodam dentro de `transaction()`.
+- A conexão é aberta sob demanda e usa `row_factory` de linhas nomeadas e chaves estrangeiras ligadas. O `timeout` (padrão 30 s) é a espera por bloqueio do banco.
+
+## Conexão
 
 ### connect(self) -> Any
 
-Essa função serve para fazer a conexão com o banco de dados e armazena essa conexão no adapter e retorna a conexão.
+Abre a conexão (ou reutiliza a já aberta), guarda no adapter e a devolve.
 
 ### close(self) -> None
 
-fecha a conexão registrada no adapter
+Fecha a conexão, se aberta, e descarta o cursor guardado.
 
 ### \_\_enter\_\_(self) -> Self
 
-Essa função define o comportamento de entrada do objeto adapter quando for usado dentro de um with
+Entrada do `with`: abre a conexão e devolve o próprio adapter.
 
 ### \_\_exit\_\_(self, exc_type, exc, tb) -> None
 
-Essa função define o comportamento de saida do objeto adapter quando for usado dentro de um with
+Saída do `with`: fecha a conexão. Não suprime exceções.
 
+## Transações
 
 ### transaction(self) -> AbstractContextManager\[Any\]
 
-usado dentro do with para abrir um região de transação. No qual define um região que tudo é executado ou nada é executado. Alem disso cuida de commitar sozinho as mudanças, então toda ação no banco é revestido pela transação.
+Região de transação usada com `with`: tudo é executado ou nada é. Commit ao sair normalmente, rollback se houver exceção (que é repropagada).
 
-## execute(self, sql: str, params: Params = ()) -> int
+Chamadas **aninhadas participam da transação mais externa**, que decide o commit ou rollback. Por isso um facede pode chamar outro na mesma conexão (ex.: `FacedeCarrinho.finalizar` usa `FacedePedido.salvar`) e tudo continua atômico.
 
-Executa um comando sql dentro de uma transação, armazena o cursor resultante e retorna o numero de linhas afetadas. recebe de argumento um comando sql e os parametros.
+Se um bloco interno falhar e a exceção for suprimida, a transação inteira é revertida e lança `RuntimeError`.
+
+## Escrita
+
+### execute(self, sql: str, params: Params = ()) -> int
+
+Executa um comando em transação, guarda o cursor e devolve o número de linhas afetadas (`-1` em consultas).
 
 ### execute_many(self, sql: str, params_seq: Sequence\[Params\]) -> int
 
-Executa o mesmo comando sql mas com vários conjuntos de parâmetros, retorna o numero de linhas afetadas e recebe como argumento o comando sql e uma sequencia de conjunto de parâmetros
+Executa o mesmo comando para vários conjuntos de parâmetros, em uma transação. Devolve o número de linhas afetadas.
 
 ### execute_script(self, script: str) -> None
 
-Executa o script sql recebido como parâmetro, retorna nada
+Executa um script com vários comandos separados por `;`. Não devolve nada.
 
-### insert(self, tabela: str, dados: dict\[str, Any\]) -> int:
+### insert(self, tabela: str, dados: dict\[str, Any\]) -> int
 
-Recebe uma tabela e dados do registro, insere um registro na tabela e retorna o id do registro
+Insere um registro (`coluna → valor`) e devolve o id gerado. O nome da tabela é interpolado no SQL, então só pode vir do código, nunca do usuário.
+
+## Leitura
+
+Exigem um `execute` anterior; sem ele lançam `RuntimeError`.
 
 ### fetch_all(self) -> list\[Linha\]
 
-usa o cursor guardo para puxar todo resultado da consulta executada
+Devolve todas as linhas do resultado (lista vazia se nenhuma).
 
+### fetch_one(self) -> Linha | None
 
-### fetch_one(self) -> Linha | None:
-
-usa o cursor guardo para recuperar o proximo elemento da fila do resultado da consulta
+Devolve a próxima linha do resultado, ou `None` se acabou.
 
 ### fetch_batches(self, tamanho_lote: int = 1000) -> Generator\[list\[Linha\]\]
 
-usa o cursor guardo para recuperar os n proximos elementos da fila do resultado da consulta, recebe com argumento a quantidade máxima de itens a serem retornado
+Devolve o resultado em lotes de até `tamanho_lote` linhas, sem carregar tudo na memória. Lança `ValueError` se `tamanho_lote < 1`. Ao terminar, o cursor é fechado, então depois dele não se lê mais esse resultado.
 
+## Metadados
 
 ### table_exists(self, tabela: str) -> bool
 
-recebe um nome de uma tabela e verifica se ela existe e retorna a resposta
-
-
-
-
+Diz se a tabela existe no banco. Atenção: usa `execute`, então substitui o cursor guardado.

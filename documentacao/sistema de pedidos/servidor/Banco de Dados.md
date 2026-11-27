@@ -1,105 +1,129 @@
+## Banco de dados usado
 
-## Bando de dados usado
- - teste -> SQLite
+- Desenvolvimento/teste: **SQLite** (caminho do arquivo na variável de ambiente `SQLITE`).
+- O acesso é sempre pelo [[Adapter do banco de dados]], então o banco pode ser trocado sem afetar o resto do sistema.
+- Chaves estrangeiras ligadas (`PRAGMA foreign_keys = ON`).
+- O script de criação está em `src/bancoDadosSQL/SQLite/querys/criaTabelas.sql` (**apaga e recria todas as tabelas**).
+- Datas são texto em UTC (`YYYY-MM-DD HH:MM:SS`).
 
+## Visão geral
 
-## Estrutura do Banco de dados
+| Grupo | Tabelas | Quem usa |
+|---|---|---|
+| Pedidos | `pedido`, `item_pedido` | [[Facede pedido]], [[Facede metricas]] |
+| Catálogo e carrinho | `produtos`, `carrinho_itens_cadastro` | [[Facede produto]], [[Facede carrinho]] |
+| Usuários e acesso | `usuario`, `cargos`, `chavesAPI` | [[Facede autenticacao]] |
+| Autorização | `tabelas`, `cargo_permissao`, `usuario_permissao` | [[Facede autorizacao]] |
 
-### Pedidos
+Relações principais: `pedido.user_id → usuario.id`, `item_pedido.id_pedido → pedido.id`, `carrinho_itens_cadastro.user_id → usuario.id`, `usuario.cargo_id → cargos.id`, `chavesAPI.user_id → usuario.id`.
 
-Tabela para registro dos pedido feitos
+---
 
-- id -> identificação pedido
-- user_id -> identificação usuário relacionado ao pedido
-- cod_rm -> identificação do pedido em um sistema externo(Nesse caso Rm)
-- num_itens-> quantidade itens nesse pedido
-- status_atual -> status atual do pedido
-- data_criacao-> data que o pedido foi criado
-- origem -> em que plataforma foi criado.
-- local_entrega -> local para entrega do pedido
-- obra -> em que obra da empresa será entregue o material
-- tarefa-> para qual tarefa da obra faz parte esse pedido
-### Itens pedido
+## Pedidos
 
-Tabela para registro dos itens dos pedidos feitos
+### pedido
 
-- id -> identificação do item dentro do pedido
-- id_pedido-> identificação do pedido
-- produto -> identificação do produto que o item se refere
-- quant -> quantidade do produto
-- uni-> unidade de medida do produto
-- data de necessidade -> data de necessidade do produto
-### Carrinho itens cadastro
+Pedidos feitos.
 
-Registro dos itens registrados no carrinho
+- `id` → identificação do pedido (autoincremento)
+- `user_id` → usuário dono do pedido (FK `usuario`)
+- `cod_rm` → identificação do pedido em um sistema externo (nesse caso o RM); opcional
+- `num_itens` → quantidade de itens do pedido
+- `status_atual` → status atual do pedido
+- `data_criacao` → quando foi criado (padrão: agora, UTC)
+- `origem` → plataforma em que foi criado
+- `local_entrega` → local de entrega
+- `obra` → obra da empresa em que o material será entregue
+- `tarefa` → tarefa da obra a que o pedido pertence
 
-- id -> identificação do item do carrinho
-- user_id -> identificação do usuário
-- produto_id-> identificação do produto
-- quantidade -> quantidade de produto
-- unidade -> unidade de medida da quantidade
-- data necessidade -> data de necessidade do produto
-### Produto
+### item_pedido
 
-Registro dos produtos cadastrados
+Itens de cada pedido. Chave primária composta `(id_pedido, id)`.
 
-- id -> identificação do produto
-- codigo -> identificação do produto externa
-- descrição-> descrição do produto
-- categoria -> categoria do produto
+- `id` → número do item dentro do pedido (1, 2, 3…)
+- `id_pedido` → pedido a que pertence (FK `pedido`)
+- `produto` → produto do item (texto, normalmente `codigo - descricao`)
+- `quant` → quantidade
+- `uni` → unidade de medida (un, m, kg…)
+- `data_necessidade` → data em que o produto é necessário
 
-### Usuario
+---
 
-registros dos usuário do sistema
+## Catálogo e carrinho
 
-- id -> identificação do usuario
-- nome -> nome do usuario
-- senha -> senha de acesso do usuario(hasheada)
-- cargo_id -> identificação do cargo do usuario
-- ativo -> estado do registro do usuario
+### produtos
 
-### Cargos 
+Produtos cadastrados.
 
-registros dos cargos dos usuários
+- `id` → identificação do produto
+- `codigo` → código externo do produto
+- `descricao` → descrição
+- `categoria` → categoria
 
-- id -> identificação do registro do cargo
-- nome -> nome do cargo
+### carrinho_itens_cadastro
 
-### Tabela
+Itens que o usuário separou para virar pedido. Único por `(user_id, produto_id, data_necessidade, unidade)`: o mesmo produto repete só com data ou unidade diferentes.
 
-registros das tabelas 
+- `id` → identifica a linha (usado para remover)
+- `user_id` → dono do carrinho (FK `usuario`)
+- `produto_id` → produto (referente a `produtos.id`)
+- `quantidade` → quantidade
+- `unidade` → unidade de medida
+- `data_necessidade` → data em que o produto é necessário
 
-- nome -> identificado e nome da tabela do banco de dados
+---
 
-## cargo permissao
+## Usuários e acesso
 
-tabela para registro das permissões dados a um cargo
+### usuario
 
-- cargo_id -> identificação do cargo
-- tabela -> identificação da tabela
-- criar -> flag de autorização de criação de registros
-- atualizar ->flag de autorização de atualização de registros
-- deletar -> flag de autorização de deletar registros
-- ler -> flag de autorização leitura de registros 
-- todos -> flag de limitação de acesso(todos ou apenas os meus)
+Usuários do sistema.
 
-## Usuario permissao
+- `id` → identificação do usuário
+- `nome` → nome (único)
+- `senha` → hash scrypt da senha, nunca o texto puro
+- `cargo_id` → cargo do usuário (FK `cargos`)
+- `ativo` → `0` aguardando validação / desativado, `1` ativo. Só usuário ativo faz login. O registro novo nasce com `ativo = 0` e cargo `pendente`.
 
-tabela para registro das permissões dadas ao usuarios
+### cargos
 
-- usuário-> identificação do cargo
-- tabela -> identificação da tabela
-- criar -> flag de autorização de criação de registros
-- atualizar ->flag de autorização de atualização de registros
-- deletar -> flag de autorização de deletar registros
-- ler -> flag de autorização leitura de registros 
-- todos -> flag de limitação de acesso(todos ou apenas os meus)
+- `id` → identificação do cargo
+- `nome` → nome do cargo (único, sem diferenciar maiúsculas)
 
-### ChaveAPI
+### chavesAPI
 
-tabela para registro da chaves de API para facilitar a identificação
+Chaves de API emitidas no login para identificar o usuário nas requisições.
 
-- chave -> chave de api para um usuário
-- usuario_id -> identificação do usuário
-- DateTime_exp-> data de expiração da chave
+- `chave` → chave (chave primária)
+- `user_id` → usuário dono da chave (FK `usuario`)
+- `DateTime_exp` → vencimento da chave; chave vencida ou sem validade é inválida
 
+---
+
+## Autorização
+
+O cargo define as permissões padrão por tabela; uma linha do usuário para a mesma tabela **substitui** a do cargo.
+
+### tabelas
+
+Tabelas do sistema sobre as quais se concede autorização.
+
+- `nome` → nome da tabela (chave primária, sem diferenciar maiúsculas)
+
+### cargo_permissao
+
+Permissões padrão de um cargo. Chave primária `(cargo_id, tabela)`.
+
+- `cargo_id` → cargo (FK `cargos`)
+- `tabela` → tabela (FK `tabelas`)
+- `criar` → pode criar registros
+- `atualizar` → pode atualizar registros
+- `deletar` → pode deletar registros
+- `ler` → pode ler registros
+- `todos` → alcance: `1` registros de qualquer dono, `0` apenas os próprios
+
+Cada flag vale `0` ou `1`.
+
+### usuario_permissao
+
+Exceções de um usuário, com as mesmas colunas de `cargo_permissao`, trocando `cargo_id` por `user_id` (FK `usuario`). Chave primária `(user_id, tabela)`.

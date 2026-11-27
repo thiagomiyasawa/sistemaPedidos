@@ -147,6 +147,7 @@ class FacedeAutorizacao(facedeAutorizacaoInterface):
             raise ValueError(f"tabela desconhecida: {tabela}")
         if self.obter_usuario(user_id) is None:
             return False
+        # `t["nome"]` (e não `tabela`) grava a grafia cadastrada em `tabelas`.
         valores = [1 if getattr(permissao, c) else 0 for c in _COLUNAS]
         self.db.execute(
             "INSERT INTO usuario_permissao (user_id, tabela, criar, atualizar, deletar, ler, todos) "

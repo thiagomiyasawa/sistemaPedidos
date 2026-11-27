@@ -40,7 +40,7 @@ from bancoDadosSQL.entidades.pedidos import Pedido  # noqa: E402
 from client.adapters.interfaces.adapterAPIInterface import ApiError  # noqa: E402
 from client.componentes.barraPaginacao import BarraPaginacao  # noqa: E402
 from client.DIC import DIC  # noqa: E402
-from client.paginas.monitorkpi.acessoServidor.interfaces.facedePedidoAPIInterface import (  # noqa: E402
+from client.facedes.interfaces.facedePedidoAPIInterface import (  # noqa: E402
     facedePedidoAPIInterface,
 )
 

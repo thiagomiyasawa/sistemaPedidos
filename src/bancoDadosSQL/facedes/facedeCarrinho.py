@@ -1,7 +1,8 @@
 """Facade do carrinho: itens que o usuário separou para o pedido (`carrinho_itens_cadastro`).
 
 Uma linha é um produto numa data de necessidade e numa unidade (único por usuário + produto +
-data + unidade): o mesmo produto pode ter várias linhas, com datas ou unidades diferentes. Depende apenas de `dbAdapterInterface`.
+data + unidade): o mesmo produto pode ter várias linhas, com datas ou unidades diferentes. Depende de
+`dbAdapterInterface` e, em `finalizar`, de `FacedePedido` (na mesma conexão) para criar o pedido.
 
 Uso:
     with DIC.db() as db:
@@ -15,6 +16,7 @@ from typing import Any
 
 from ..dbAdapterInterface import dbAdapterInterface
 from ..entidades.pedidos import ItemPedido, Pedido
+from .facedePedido import FacedePedido
 from .interfaces.facedeCarrinhoInterface import facedeCarrinhoInterface
 
 
@@ -72,7 +74,12 @@ class FacedeCarrinho(facedeCarrinhoInterface):
 
         Returns:
             bool: True se adicionou; False se o produto não existir.
+
+        Raises:
+            ValueError: se `quantidade` não for positiva.
         """
+        if quantidade <= 0:
+            raise ValueError("a quantidade deve ser positiva")
         data = data_necessidade.isoformat()
         afetadas = self.db.execute(
             "INSERT INTO carrinho_itens_cadastro (user_id, produto_id, quantidade, unidade, data_necessidade) "
@@ -136,11 +143,9 @@ class FacedeCarrinho(facedeCarrinhoInterface):
             pedido = Pedido(
                 num_itens=len(itens), status_atual=STATUS_INICIAL, origem=ORIGEM_PEDIDO,
                 local_entrega=local_entrega, obra=obra, tarefa=tarefa, user_id=user_id, itens=itens)
-            pedido.id = self.db.insert("pedido", pedido.to_row())
-            for n, item in enumerate(itens, start=1):  # id do item = nº dentro do pedido
-                item.id, item.id_pedido = n, pedido.id
-                self.db.insert("item_pedido", item.to_row())
-            self.db.execute("DELETE FROM carrinho_itens_cadastro WHERE user_id = ?", (user_id,))
+            # Mesma conexão (`self.db`): a transação do `salvar` participa da deste bloco.
+            pedido = FacedePedido(self.db).salvar(pedido)
+            self.limpar(user_id)
         return pedido.id
 
     def limpar(self, user_id: int) -> None:

@@ -12,11 +12,11 @@ from datetime import date
 from PySide6.QtCore import QObject, Signal
 
 from client.adapters.interfaces.adapterAPIInterface import ApiError
-from client.paginas.sisPedidos.acessoServidor.interfaces.facedeCarrinhoAPIInterface import (
+from client.facedes.interfaces.facedeCarrinhoAPIInterface import (
     facedeCarrinhoAPIInterface,
 )
-from client.paginas.sisPedidos.entidades.itemCarrinho import ItemCarrinho
-from client.paginas.sisPedidos.entidades.produto import Produto
+from client.entidades.itemCarrinho import ItemCarrinho
+from client.entidades.produto import Produto
 
 
 class Carrinho(QObject):
@@ -55,6 +55,14 @@ class Carrinho(QObject):
         """
         self.itens = {i.id: i for i in itens}
         self.alterado.emit()
+
+    def esquecer(self) -> None:
+        """Descarta só a cópia local, sem tocar na API (usado no logout).
+
+        Evita que o próximo usuário veja, por um instante, os itens do anterior; o carrinho
+        dele é buscado por `recarregar()` quando a página é aberta.
+        """
+        self._definir([])
 
     def _falha(self, e: ApiError) -> bool:
         """Emite `falhou` com a mensagem do erro.

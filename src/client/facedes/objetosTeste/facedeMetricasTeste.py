@@ -12,13 +12,13 @@ from typing import Self
 from bancoDadosSQL.dbAdapterInterface import dbAdapterInterface
 from bancoDadosSQL.facedes.facedeMetricas import FacedeMetricas
 from bancoDadosSQL.SQLite.SQLiteAdapter import SQLiteAdapter
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI.topItens import (
+from client.facedes.formulariosAPI.topItens import (
     TopItensEntrada,
 )
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI.valoresFiltros import (
+from client.facedes.formulariosAPI.valoresFiltros import (
     TarefasEntrada,
 )
-from client.paginas.monitorkpi.acessoServidor.interfaces.facedeMetricasAPIInterface import (
+from client.facedes.interfaces.facedeMetricasAPIInterface import (
     facedeMetricasAPIInterface,
 )
 

@@ -20,22 +20,22 @@ from typing import Self
 
 from bancoDadosSQL.entidades.pedidos import ItemPedido, Pedido
 from client.adapters.adapterAPI import AdapterAPI
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI import listarItens
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI import listarPedidos
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI.adicionarItem import (
+from client.facedes.formulariosAPI import listarItens
+from client.facedes.formulariosAPI import listarPedidos
+from client.facedes.formulariosAPI.adicionarItem import (
     AdicionarItemEntrada,
 )
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI.atualizarPedido import (
+from client.facedes.formulariosAPI.atualizarPedido import (
     AtualizarPedidoEntrada,
 )
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI.criarPedido import (
+from client.facedes.formulariosAPI.criarPedido import (
     CriarPedidoEntrada,
     CriarPedidoSaida,
 )
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI.listarPedidos import (
+from client.facedes.formulariosAPI.listarPedidos import (
     ListarPedidosEntrada,
 )
-from client.paginas.monitorkpi.acessoServidor.formulariosAPI.obterPedido import (
+from client.facedes.formulariosAPI.obterPedido import (
     ObterPedidoSaida,
 )
 from client.adapters.interfaces.adapterAPIInterface import (
@@ -43,7 +43,7 @@ from client.adapters.interfaces.adapterAPIInterface import (
     Json,
     adapterAPIInterface,
 )
-from client.paginas.monitorkpi.acessoServidor.interfaces.facedePedidoAPIInterface import (
+from client.facedes.interfaces.facedePedidoAPIInterface import (
     facedePedidoAPIInterface,
 )
 

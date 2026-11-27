@@ -14,6 +14,7 @@ from ..dbAdapterInterface import dbAdapterInterface
 from .interfaces.facedeMetricasInterface import facedeMetricasInterface
 
 _FORMATO_DATA = "%Y-%m-%d %H:%M:%S"  # como `data_criacao` é gravada (UTC, texto)
+_COLUNAS_DISTINTAS = frozenset({"obra", "tarefa", "status_atual", "origem"})
 
 
 class FacedeMetricas(facedeMetricasInterface):
@@ -77,8 +78,13 @@ class FacedeMetricas(facedeMetricasInterface):
 
         Returns:
             list[str]: valores distintos ordenados.
+
+        Raises:
+            ValueError: se `coluna` não for uma das colunas permitidas.
         """
-        # `coluna` vem só deste módulo (constantes), nunca do usuário.
+        # `coluna` é interpolada no SQL: só aceita as colunas conhecidas.
+        if coluna not in _COLUNAS_DISTINTAS:
+            raise ValueError(f"coluna não permitida: {coluna}")
         self.db.execute(
             f"SELECT DISTINCT {coluna} AS v FROM pedido {onde} ORDER BY {coluna}", params)
         rows = self.db.fetch_all()
